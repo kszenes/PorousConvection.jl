@@ -14,44 +14,29 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
 
-macro d_xif_own(A)
+macro all_own(A)
+    esc(:($A[ix,iy,iz]))
+end
+macro d_xi_own(A)
     esc(:($A[ix+1, iy+1, iz+1] - $A[ix, iy+1, iz+1]))
 end
-macro d_xib_own(A)
-    esc(:($A[ix, iy+1, iz+1] - $A[ix-1, iy+1, iz+1]))
-end
-macro d_yif_own(A)
+macro d_yi_own(A)
     esc(:($A[ix+1, iy+1, iz+1] - $A[ix+1, iy, iz+1]))
 end
-macro d_yib_own(A)
-    esc(:($A[ix+1, iy, iz+1] - $A[ix+1, iy-1, iz+1]))
-end
-macro d_zif_own(A)
+macro d_zi_own(A)
     esc(:($A[ix+1, iy+1, iz+1] - $A[ix+1, iy+1, iz]))
 end
-macro d_zib_own(A)
-    esc(:($A[ix+1, iy+1, iz] - $A[ix+1, iy+1, iz-1]))
-end
-macro d_xaf_own(A)
+macro d_xa_own(A)
     esc(:($A[ix+1, iy, iz] - $A[ix, iy, iz]))
 end
-macro d_xab_own(A)
-    esc(:($A[ix, iy, iz] - $A[ix-1, iy, iz]))
-end
-macro d_yaf_own(A)
+macro d_ya_own(A)
     esc(:($A[ix, iy+1, iz] - $A[ix, iy, iz]))
 end
-macro d_yab_own(A)
-    esc(:($A[ix, iy, iz] - $A[ix, iy-1, iz]))
-end
-macro d_zaf_own(A)
+macro d_za_own(A)
     esc(:($A[ix, iy, iz+1] - $A[ix, iy, iz]))
 end
-macro d_zab_own(A)
-    esc(:($A[ix, iy, iz] - $A[ix, iy, iz-1]))
-end
-macro av_zab_own(A)
-    esc(:($A[ix, iy, iz]/2 + $A[ix, iy, iz-1]/2))
+macro av_za_own(A)
+    esc(:($A[ix, iy, iz+1]/2 + $A[ix, iy, iz]/2))
 end
 
 """
@@ -60,15 +45,16 @@ Computes Darcy flux.
 @parallel_indices (ix, iy, iz) function compute_flux_p_3D!(
     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg
 )
-    if (1 < ix < size(qDx, 1) && 1 <= iy <= size(qDx, 2) && 1 <= iz <= size(qDx, 3))
-        qDx[ix,iy,iz] = qDx[ix,iy,iz] - _1_θ_dτ * (qDx[ix,iy,iz] + k_ηf * _dx * @d_xab_own(Pf))
+    nx, ny, nz = size(Pf)
+    if (ix < nx && iy <= ny &&  iz <= nz)
+        qDx[ix+1,iy,iz] = qDx[ix+1,iy,iz] - _1_θ_dτ * (qDx[ix+1,iy,iz] + k_ηf * _dx * @d_xa_own(Pf))
     end
-    if (1 <= ix <= size(qDy, 1) && 1 < iy < size(qDy, 2) && 1 <= iz <= size(qDy, 3))
-        qDy[ix,iy,iz] = qDy[ix,iy,iz] - _1_θ_dτ * (qDy[ix,iy,iz] + k_ηf * _dy * @d_yab_own(Pf))
+    if (ix <= nx && iy < ny && iz <= nz)
+        qDy[ix,iy+1,iz] = qDy[ix,iy+1,iz] - _1_θ_dτ * (qDy[ix,iy+1,iz] + k_ηf * _dy * @d_ya_own(Pf))
     end
-    if (1 <= ix <= size(qDz, 1) && 1 <= iy <= size(qDz, 2) && 1 < iz < size(qDz, 3))
-        qDz[ix,iy,iz] = qDz[ix,iy,iz] - _1_θ_dτ * (
-                qDz[ix,iy,iz] + k_ηf * _dz * @d_zab_own(Pf) - αρg * @av_zab_own(T)
+    if (ix <= nx && iy <= ny && iz < nz)
+        qDz[ix,iy,iz+1] = qDz[ix,iy,iz+1] - _1_θ_dτ * (
+                qDz[ix,iy,iz+1] + k_ηf * _dz * @d_za_own(Pf) - αρg * @av_za_own(T)
             )
     end
     return nothing
@@ -77,9 +63,10 @@ end
 Updates pressure using Darcy flux.
 """
 @parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
-    if (1 <= ix <= size(Pf, 1) && 1 <= iy <= size(Pf, 2) && 1 <= iz <= size(Pf, 3))
+    nx, ny, nz = size(Pf)
+    if (ix <= nx && iy <= ny && iz <= nz)
         Pf[ix,iy,iz] = Pf[ix,iy,iz] - _β_dτ * (
-                @d_xaf_own(qDx) * _dx + @d_yaf_own(qDy) * _dy + @d_zaf_own(qDz) * _dz
+                @d_xa_own(qDx) * _dx + @d_ya_own(qDy) * _dy + @d_za_own(qDz) * _dz
             )
     end
     return nothing
@@ -107,38 +94,21 @@ Compute pressure fluxes and gradients.
 @parallel_indices (ix, iy, iz) function compute_flux_T_3D!(
     T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
 )
-    if (1 <= ix <= size(qTx, 1) && 1 <= iy <= size(qTx, 2) && 1 <= iz <= size(qTx, 3))
-        qTx[ix,iy,iz] = qTx[ix,iy,iz] - _1_θ_dτ_T * (qTx[ix,iy,iz] - λ_ρCp * _dx * @d_xif_own(T))
-        gradTx[ix,iy,iz] = @d_xif_own(T) * _dx
+    if (ix <= size(qTx, 1) && iy <= size(qTx, 2) && iz <= size(qTx, 3))
+        @all_own(qTx) = @all_own(qTx) - (@all_own(qTx) + λ_ρCp * _dx * @d_xi_own(T)) * _1_θ_dτ_T
+        @all_own(gradTx) = @d_xi_own(T) * _dx
     end
-    if (1 <= ix <= size(qTy, 1) && 1 <= iy <= size(qTy, 2) && 1 <= iz <= size(qTy, 3))
-        qTy[ix,iy,iz] = qTy[ix,iy,iz] - _1_θ_dτ_T * (qTy[ix,iy,iz] - λ_ρCp * _dy * @d_yif_own(T))
-        gradTy[ix,iy,iz] = @d_yif_own(T) * _dy
+    if (ix <= size(qTy, 1) && iy <= size(qTy, 2) && iz <= size(qTy, 3))
+        @all_own(qTy) = @all_own(qTy) - (@all_own(qTy) + λ_ρCp * _dy * @d_yi_own(T)) * _1_θ_dτ_T
+        @all_own(gradTy) = @d_yi_own(T) * _dy
     end
-    if (1 <= ix <= size(qTz, 1) && 1 <= iy <= size(qTz, 2) && 1 <= iz <= size(qTz, 3))
-        qTz[ix,iy,iz] = qTz[ix,iy,iz] - _1_θ_dτ_T * (qTz[ix,iy,iz] - λ_ρCp * _dz * @d_zif_own(T))
-        gradTz[ix,iy,iz] = @d_zif_own(T) * _dz
+    if (ix <= size(qTz, 1) && iy <= size(qTz, 2) && iz <= size(qTz, 3))
+        @all_own(qTz) = @all_own(qTz) - (@all_own(qTz) + λ_ρCp * _dy * @d_zi_own(T)) * _1_θ_dτ_T
+        @all_own(gradTz) = @d_zi_own(T) * _dz
     end
 
-    # @all(qTx) = @all(qTx) - (@all(qTx) + λ_ρCp * _dx * @d_xi(T)) * _1_θ_dτ_T
-    # @all(qTy) = @all(qTy) - (@all(qTy) + λ_ρCp * _dy * @d_yi(T)) * _1_θ_dτ_T
-    # @all(qTz) = @all(qTz) - (@all(qTz) + λ_ρCp * _dz * @d_zi(T)) * _1_θ_dτ_T
-    # @all(gradTx) = @d_xi(T) * _dx
-    # @all(gradTy) = @d_yi(T) * _dy
-    # @all(gradTz) = @d_zi(T) * _dz
     return nothing
 end
-# @parallel function compute_flux_T_3D!(
-#     T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
-# )
-#     @all(qTx) = @all(qTx) - (@all(qTx) + λ_ρCp * _dx * @d_xi(T)) * _1_θ_dτ_T
-#     @all(qTy) = @all(qTy) - (@all(qTy) + λ_ρCp * _dy * @d_yi(T)) * _1_θ_dτ_T
-#     @all(qTz) = @all(qTz) - (@all(qTz) + λ_ρCp * _dz * @d_zi(T)) * _1_θ_dτ_T
-#     @all(gradTx) = @d_xi(T) * _dx
-#     @all(gradTy) = @d_yi(T) * _dy
-#     @all(gradTz) = @d_zi(T) * _dz
-#     return nothing
-# end
 
 """
 Compute dTdt expression.
@@ -165,11 +135,15 @@ end
 """
 Update temperature
 """
-@parallel function update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
-    @inn(T) =
-        @inn(T) -
-        (@all(dTdt) + @d_xa(qTx) * _dx + @d_ya(qTy) * _dy + @d_za(qTz) * _dz) * _β_dt
+@parallel_indices (ix, iy, iz) function update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
+    nx, ny, nz = size(T)
+    if (1 <= ix < nx-1 && 1 <= iy < ny-1 && 1 <= iz < nz-1)
+        T[ix+1, iy+1, iz+1] = T[ix+1, iy+1, iz+1] - _β_dt * (
+            dTdt[ix, iy, iz] +
+            @d_xa_own(qTx) * _dx + @d_ya_own(qTy) * _dy + @d_za_own(qTz) * _dz)
+    end
     return nothing
+
 end
 
 """
@@ -226,10 +200,13 @@ function compute_temp_3D!(
     @parallel blocks threads compute_flux_T_3D!(
         T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
     )
-    @parallel computedTdt_3D!(
+    @parallel compute_flux_T_3D_rest!(
+        T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
+    )
+    @parallel blocks threads computedTdt_3D!(
         dTdt, T, T_old, gradTx, gradTy, gradTz, qDx, qDy, qDz, _dt, _ϕ
     )
-    @parallel update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
+    @parallel blocks threads update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
     @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
     @parallel (1:size(T, 1), 1:size(T, 3)) bc_yz!(T)
     return nothing
