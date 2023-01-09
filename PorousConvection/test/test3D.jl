@@ -15,12 +15,15 @@ include("../src/porous_convection_implicit_3D.jl")
 @testset "3D Porous Convection solver" begin
     # unit test
     _dx = _dy = _dz = _β_dτ = 1
-    n = 5
+    n = 6
     Pf = @zeros(n, n, n)
     qDx = @zeros(n + 1, n, n)
     qDy = @zeros(n, n + 1, n)
     qDz = @zeros(n, n, n + 1)
-    @parallel compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    threads = (2, 2, 2)
+    blocks = (n, n, n) .÷ threads
+    # Implement sharedMem
+    @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(Pf)) compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     @test all(zeros(n, n) .≈ Array(Pf))
 
     # reference test
@@ -35,6 +38,7 @@ include("../src/porous_convection_implicit_3D.jl")
     ]
     T = porous_convection_implicit_3D(; nx=30, ny=30, nz=30, nt=10, save=false)
     @show T[x_idx, y_idx, z_idx]
+    @show T_ref .≈ T[x_idx, y_idx, z_idx]
     @test all(T_ref .≈ T[x_idx, y_idx, z_idx])
 end
 

@@ -65,9 +65,9 @@ function porous_convection_implicit_3D(;
     dTdt = @zeros(nx - 2, ny - 2, nz - 2)
     r_Pf = zeros(nx, ny, nz)
     r_T = zeros(nx - 2, ny - 2, nz - 2)
-    gradTx = @zeros(nx - 1, ny - 2, nz - 2)
-    gradTy = @zeros(nx - 2, ny - 1, nz - 2)
-    gradTz = @zeros(nx - 2, ny - 2, nz - 1)
+    # gradTx = @zeros(nx - 1, ny - 2, nz - 2)
+    # gradTy = @zeros(nx - 2, ny - 1, nz - 2)
+    # gradTz = @zeros(nx - 2, ny - 2, nz - 1)
     for it in 1:nt
         T_old .= T
         # time step
@@ -109,9 +109,9 @@ function porous_convection_implicit_3D(;
                 qTx,
                 qTy,
                 qTz,
-                gradTx,
-                gradTy,
-                gradTz,
+                # gradTx,
+                # gradTy,
+                # gradTz,
                 qDx,
                 qDy,
                 qDz,

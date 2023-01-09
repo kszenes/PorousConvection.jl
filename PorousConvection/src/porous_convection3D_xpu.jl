@@ -121,32 +121,47 @@ function porous_convection_implicit_3D(;
         err_D = 2ϵtol
         err_T = 2ϵtol
         err_T = 0.0
+
         # iteration loop
         while max(err_D, err_T) >= ϵtol && iter <= maxiter
             # --- Pressure ---
-            @hide_communication b_width begin
-                @parallel compute_flux_p_3D!(
-                    qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg
-                )
-                update_halo!(qDx, qDy, qDz)
-            end
             # @hide_communication b_width begin
-                @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
-                update_halo!(Pf)
+                threads = (8, 8, 4)
+                blocks = size(Pf) .÷ threads
+                @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg)
+                # @parallel compute_flux_p_3D!(
+                #     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg
+                # )
             # end
-            @parallel compute_flux_T_3D!(
-                T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
+
+            # @hide_communication b_width begin
+                # @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
+                @parallel blocks threads shmem=3*(prod(threads.+1))*sizeof(eltype(Pf)) compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
+                update_halo!(Pf)
+                update_halo!(qDx, qDy, qDz)
+            # end
+
+            
+            @parallel blocks threads compute_flux_T_3D!(
+                T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
             )
-            @parallel computedTdt_3D!(
-                dTdt, T, T_old, gradTx, gradTy, gradTz, qDx, qDy, qDz, _dt, _ϕ
-            )
+            # @parallel compute_flux_T_3D!(
+            #     T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
+            # )
+
+            # @parallel computedTdt_3D!(
+            #     dTdt, T, T_old, gradTx, gradTy, gradTz, qDx, qDy, qDz, _dt, _ϕ
+            # )
             # --- Temperature ---
-            @hide_communication b_width begin
-                @parallel update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
+            # @hide_communication b_width begin
+                @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(T)) update_T_3D!(
+                    dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ, _1_dt_β_dτ_T
+                )
+                # @parallel update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
                 @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
                 @parallel (1:size(T, 1), 1:size(T, 3)) bc_yz!(T)
                 update_halo!(T)
-            end
+            # end
             if iter % ncheck == 0
                 r_Pf .= Array(
                     diff(qDx; dims=1) ./ dx .+ diff(qDy; dims=2) ./ dy .+
