@@ -17,6 +17,9 @@ using ParallelStencil.FiniteDifferences3D
 macro all_own(A)
     esc(:($A[ix,iy,iz]))
 end
+macro inn_own(A)
+    esc(:($A[ix+1,iy+1,iz+1]))
+end
 macro d_xi_own(A)
     esc(:($A[ix+1, iy+1, iz+1] - $A[ix, iy+1, iz+1]))
 end
@@ -53,15 +56,11 @@ Computes Darcy flux.
 
     P_l = @sharedMem(eltype(Pf), (@blockDim().x+1, @blockDim().y+1, @blockDim().z+1))
     # Load data into shared memory
-    P_l[tx,ty,tz] = Pf[ix,iy,iz]
-    if (ix < nx && iy <= ny && iz <= nz)
-        if (tx == @blockDim().x) P_l[tx+1,ty,tz] = Pf[ix+1,iy,iz] end
-    end
-    if (ix <= nx && iy < ny && iz <= nz)
-        if (ty == @blockDim().y) P_l[tx,ty+1,tz] = Pf[ix,iy+1,iz] end
-    end
-    if (ix <= nx && iy <= ny && iz < nz)
-        if (tz == @blockDim().z) P_l[tx,ty,tz+1] = Pf[ix,iy,iz+1] end
+    if (ix <= nx && iy <= ny && iz <= nz)
+        P_l[tx,ty,tz] = Pf[ix,iy,iz]
+        if (ix < nx && tx == @blockDim().x) P_l[tx+1,ty,tz] = Pf[ix+1,iy,iz] end
+        if (iy < ny && ty == @blockDim().y) P_l[tx,ty+1,tz] = Pf[ix,iy+1,iz] end
+        if (iz < nz && tz == @blockDim().z) P_l[tx,ty,tz+1] = Pf[ix,iy,iz+1] end
     end
     @sync_threads()
 
@@ -86,38 +85,48 @@ Computes Darcy flux.
     end
     return nothing
 end
+
+# """
+# Updates pressure using Darcy flux.
+# TODO: Still does not work (only with threads = (5, 5, 5))
+# """
+# @parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+#     nx, ny, nz = size(Pf)
+#     tx = @threadIdx().x
+#     ty = @threadIdx().y
+#     tz = @threadIdx().z
+
+#     qDx_l = CUDA.@cuDynamicSharedMem(eltype(qDx), (@blockDim().x+1, @blockDim().y, @blockDim().z))
+#     qDy_l = CUDA.@cuDynamicSharedMem(eltype(qDy),
+#         (@blockDim().x, @blockDim().y+1, @blockDim().z),
+#         sizeof(qDx_l))
+#     offset = sizeof(qDx_l) + sizeof(qDy_l)
+#     qDz_l = CUDA.@cuDynamicSharedMem(eltype(qDz),
+#         (@blockDim().x, @blockDim().y, @blockDim().z+1),
+#         offset)
+
+#     if (ix <= nx && iy <= ny && iz <= nz)
+#         qDx_l[tx,ty,tz] = qDx[ix,iy,iz]
+#         qDy_l[tx,ty,tz] = qDy[ix,iy,iz]
+#         qDz_l[tx,ty,tz] = qDz[ix,iy,iz]
+#         if (@threadIdx().x == @blockDim().x) qDx_l[tx+1,ty,tz] = qDx[ix+1,iy,iz] end
+#         if (@threadIdx().y == @blockDim().y) qDy_l[tx,ty+1,tz] = qDy[ix,iy+1,iz] end
+#         if (@threadIdx().z == @blockDim().z) qDz_l[tx,ty,tz+1] = qDz[ix,iy,iz+1] end
+#         @sync_threads()
+#         Pf[ix,iy,iz] = Pf[ix,iy,iz] - _β_dτ * (
+#                 (qDx_l[tx+1,ty,tz] - qDx_l[tx,ty,tz]) * _dx +
+#                 (qDy_l[tx,ty+1,tz] - qDy_l[tx,ty,tz]) * _dy +
+#                 (qDz_l[tx,ty,tz+1] - qDz_l[tx,ty,tz]) * _dz
+#             )
+#     end
+#     return nothing
+# end
+
 """
 Updates pressure using Darcy flux.
 """
-@parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
-    nx, ny, nz = size(Pf)
-    tx = @threadIdx().x
-    ty = @threadIdx().y
-    tz = @threadIdx().z
-
-    qDx_l = CUDA.@cuDynamicSharedMem(eltype(qDx), (@blockDim().x+1, @blockDim().y, @blockDim().z))
-    qDy_l = CUDA.@cuDynamicSharedMem(eltype(qDy),
-        (@blockDim().x, @blockDim().y+1, @blockDim().z),
-        sizeof(qDx_l))
-    offset = sizeof(qDx_l) + sizeof(qDy_l)
-    qDz_l = CUDA.@cuDynamicSharedMem(eltype(qDy),
-        (@blockDim().x, @blockDim().y, @blockDim().z+1),
-        offset)
-
-    if (ix <= nx && iy <= ny && iz <= nz)
-        qDx_l[tx,ty,tz] = qDx[ix,iy,iz]
-        qDy_l[tx,ty,tz] = qDy[ix,iy,iz]
-        qDz_l[tx,ty,tz] = qDz[ix,iy,iz]
-        if (@threadIdx().x == @blockDim().x) qDx_l[tx+1,ty,tz] = qDx[ix+1,iy,iz] end
-        if (@threadIdx().y == @blockDim().y) qDy_l[tx,ty+1,tz] = qDy[ix,iy+1,iz] end
-        if (@threadIdx().z == @blockDim().z) qDz_l[tx,ty,tz+1] = qDz[ix,iy,iz+1] end
-        @sync_threads()
-        Pf[ix,iy,iz] = Pf[ix,iy,iz] - _β_dτ * (
-                (qDx_l[tx+1,ty,tz] - qDx_l[tx,ty,tz]) * _dx +
-                (qDy_l[tx,ty+1,tz] - qDy_l[tx,ty,tz]) * _dy +
-                (qDz_l[tx,ty,tz+1] - qDz_l[tx,ty,tz]) * _dz
-            )
-    end
+@parallel function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @all(Pf) = @all(Pf) - (@d_xa(qDx) * _dx + @d_ya(qDy) * _dy + @d_za(qDz) * _dz) * _β_dτ
     return nothing
 end
 
@@ -130,12 +139,14 @@ function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
 )
     # TODO: change threads values
-    threads = (5, 5, 5)
-    blocks = size(Pf) .÷ threads
-    shmem = 3*(prod(threads.+1))*sizeof(eltype(Pf))
-    @show size(Pf) size(qDx) threads blocks shmem
+    threads = (8, 4, 4)
+    # blocks = size(Pf) .÷ threads
+    blocks  = (size(Pf) .+ threads .- 1) .÷ threads
     @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
-    @parallel blocks threads shmem=shmem compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    # threads = (5, 5, 5) # BUG: Only works with same number of threads in each dim
+    # blocks  = (size(Pf) .+ threads .- 1) .÷ threads
+    # @parallel blocks threads shmem=3*(prod(threads.+1))*sizeof(eltype(Pf)) compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @parallel compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     return nothing
 end
 
@@ -147,64 +158,80 @@ Compute pressure fluxes and gradients.
 )
     nx, ny, nz = size(T)
 
+    tx = @threadIdx().x
+    ty = @threadIdx().y
+    tz = @threadIdx().z
+
+    T_l = @sharedMem(eltype(T), (@blockDim().x+1, @blockDim().y+1, @blockDim().z+1))
+    # Load data into shared memory
+    if (ix <= nx - 1 && iy <= ny - 1 && iz <= nz - 1)
+        T_l[tx+1,ty+1,tz+1] = T[ix+1,iy+1,iz+1]
+        T_l[tx,ty+1,tz+1] = T[ix,iy+1,iz+1]
+        T_l[tx+1,ty+1,tz] = T[ix+1,iy+1,iz]
+        T_l[tx+1,ty,tz+1] = T[ix+1,iy,iz+1]
+    end
+    @sync_threads()
+
     if (ix <= nx-1 && iy <= ny-2 && iz <= nz-2)
         qTx[ix,iy,iz] = qTx[ix,iy,iz] -  _1_θ_dτ_T * (
-                            qTx[ix,iy,iz] + λ_ρCp * _dx * (
-                            T[ix+1,iy+1,iz+1] - T[ix,iy+1,iz+1])
+                            qTx[ix,iy,iz] + λ_ρCp * _dx *
+                            (T_l[tx+1,ty+1,tz+1] - T_l[tx,ty+1,tz+1])
                         )
+        
     end
     if (ix <= nx-2 && iy <= ny-1 && iz <= nz-2)
         qTy[ix,iy,iz] = qTy[ix,iy,iz] - _1_θ_dτ_T * (
                             qTy[ix,iy,iz] + λ_ρCp * _dy *
-                            (T[ix+1,iy+1,iz+1] - T[ix+1,iy,iz+1])
+                            (T_l[tx+1,ty+1,tz+1] - T_l[tx+1,ty,tz+1])
                         ) 
     end
     if (ix <= nx-2 && iy <= ny-2 && iz <= nz-1)
         qTz[ix,iy,iz] = qTz[ix,iy,iz] - _1_θ_dτ_T * (
-                            qTz[ix,iy,iz] + λ_ρCp * _dy *
-                            (T[ix+1,iy+1,iz+1] - T[ix+1,iy+1,iz])
+                            qTz[ix,iy,iz] + λ_ρCp * _dz *
+                            (T_l[tx+1,ty+1,tz+1] - T_l[tx+1,ty+1,tz])
                         ) 
     end
 
     return nothing
 end
 
+
 """
 Compute dTdt expression.
 """
-@parallel_indices (ix, iy, iz) function update_T_3D!(
-    dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ, _β_dt
+@parallel_indices (ix, iy, iz) function computedTdt_3D!(
+    dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ
 )
     nx, ny, nz = size(T)
-    tx = @threadIdx().x + 1
-    ty = @threadIdx().y + 1
-    tz = @threadIdx().z + 1
+    tx = @threadIdx().x
+    ty = @threadIdx().y
+    tz = @threadIdx().z
 
-    T_l = CUDA.@cuDynamicSharedMem(eltype(T), (@blockDim().x+2, @blockDim().y+2, @blockDim().z+2))
-    T_l[tx,ty,tz] = T[ix,iy,iz]
+    T_l = @sharedMem(eltype(T), (@blockDim().x+2, @blockDim().y+2, @blockDim().z+2))
+
     if (1 < ix < nx && 1 < iy < ny && 1 < iz < nz)
-        if (@threadIdx().x == 1)             T_l[tx-1, ty, tz] = T[ix-1, iy, iz] end
-        if (@threadIdx().x == @blockDim().x) T_l[tx+1, ty, tz] = T[ix+1, iy, iz] end
-        if (@threadIdx().y == 1)             T_l[tx, ty-1, tz] = T[ix, iy-1, iz] end
-        if (@threadIdx().y == @blockDim().y) T_l[tx, ty+1, tz] = T[ix, iy+1, iz] end
-        if (@threadIdx().z == 1)             T_l[tx, ty, tz-1] = T[ix, iy, iz-1] end
-        if (@threadIdx().z == @blockDim().z) T_l[tx, ty, tz+1] = T[ix, iy, iz+1] end
-        @sync_threads()
-
-        T[ix, iy, iz] = T_l[tx, ty, tz] - _β_dt * (
-            (T_l[tx, ty, tz] - T_old[ix, iy, iz]) * _dt +
-            (
-                max(0.0, qDx[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx-1,ty,tz]) * _dx +
-                min(0.0, qDx[ix+1, iy, iz]) * (T_l[tx+1,ty,tz] - T_l[tx,ty,tz]) * _dx +
-                max(0.0, qDy[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty-1,tz]) * _dy +
-                min(0.0, qDy[ix, iy+1, iz]) * (T_l[tx,ty+1,tz] - T_l[tx,ty,tz]) * _dy +
-                max(0.0, qDz[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty,tz-1]) * _dz  +
-                min(0.0, qDz[ix, iy, iz+1]) * (T_l[tx,ty,tz+1] - T_l[tx,ty,tz]) * _dz
-            ) * _ϕ +
-            (qTx[ix,iy-1,iz-1] - qTx[ix-1,iy-1,iz-1]) * _dx +
-            (qTy[ix-1,iy,iz-1] - qTy[ix-1,iy-1,iz-1]) * _dy +
-            (qTz[ix-1,iy-1,iz] - qTz[ix-1,iy-1,iz-1]) * _dz
+        T_l[tx, ty, tz] = T[ix,iy,iz]
+        dTdt[ix-1, iy-1, iz-1] =
+             _dt * (T[ix, iy, iz] - T_old[ix, iy, iz]) +  _ϕ * (
+                max(0.0, qDx[ix, iy, iz]) * (T[ix,iy,iz] - T[ix-1,iy,iz]) * _dx +
+                min(0.0, qDx[ix+1, iy, iz]) * (T[ix+1,iy,iz] - T[ix,iy,iz]) * _dx +
+                max(0.0, qDy[ix, iy, iz]) * (T[ix,iy,iz] - T[ix,iy-1,iz]) * _dy +
+                min(0.0, qDy[ix, iy+1, iz]) * (T[ix,iy+1,iz] - T[ix,iy,iz]) * _dy +
+                max(0.0, qDz[ix, iy, iz]) * (T[ix,iy,iz] - T[ix,iy,iz-1]) * _dz +
+                min(0.0, qDz[ix, iy, iz+1]) * (T[ix,iy,iz+1] - T[ix,iy,iz]) * _dz
             )
+    end
+    return nothing
+end
+
+@parallel_indices (ix, iy, iz) function update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
+    nx, ny, nz = size(T)
+    if (ix <= nx-2 && iy <= ny-2 && iz <= nz-2)
+        T[ix+1,iy+1,iz+1] = T[ix+1,iy+1,iz+1] - _β_dt * (
+            dTdt[ix,iy,iz]  +
+            (qTx[ix+1,iy,iz] - qTx[ix,iy,iz]) * _dx +
+            (qTy[ix,iy+1,iz] - qTy[ix,iy,iz]) * _dy +
+            (qTz[ix,iy,iz+1] - qTz[ix,iy,iz]) * _dz)
     end
     return nothing
 end
@@ -254,18 +281,17 @@ function compute_temp_3D!(
     _1_θ_dτ_T,
     _ϕ,
 )
-    threads = (5, 5, 5)
-    blocks = size(T) .÷ threads
-    shmem = 3*(prod(threads.+1))*sizeof(eltype(T))
-    @show size(T)
+    threads = (8, 4, 4)
+    # blocks = size(T) .÷ threads
+    blocks  = (size(T) .+ threads .- 1) .÷ threads
 
-    @parallel blocks threads compute_flux_T_3D!(
+    @parallel blocks threads shmem=prod(threads.+1)*sizeof(eltype(T)) compute_flux_T_3D!(
         T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
     )
-    @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(T)) update_T_3D!(
-        dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ, _1_dt_β_dτ_T
+    @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(T)) computedTdt_3D!(
+        dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ
     )
-    # @parallel blocks threads shmem=shmem update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
+    @parallel blocks threads update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
     @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
     @parallel (1:size(T, 1), 1:size(T, 3)) bc_yz!(T)
     return nothing
