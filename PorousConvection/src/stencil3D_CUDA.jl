@@ -200,25 +200,32 @@ end
 Compute dTdt expression.
 """
 @parallel_indices (ix, iy, iz) function computedTdt_3D!(
-    dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ
+    dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
 )
     nx, ny, nz = size(T)
-    tx = @threadIdx().x
-    ty = @threadIdx().y
-    tz = @threadIdx().z
+    tx = @threadIdx().x+1
+    ty = @threadIdx().y+1
+    tz = @threadIdx().z+1
 
     T_l = @sharedMem(eltype(T), (@blockDim().x+2, @blockDim().y+2, @blockDim().z+2))
 
+    if (ix <= nx && iy <= ny && iz <= nz) T_l[tx, ty, tz] = T[ix, iy, iz] end
     if (1 < ix < nx && 1 < iy < ny && 1 < iz < nz)
-        T_l[tx, ty, tz] = T[ix,iy,iz]
+        if (@threadIdx().x == 1) T_l[tx-1,ty,tz] = T[ix-1,iy,iz] end
+        if (@threadIdx().y == 1) T_l[tx,ty-1,tz] = T[ix,iy-1,iz] end
+        if (@threadIdx().z == 1) T_l[tx,ty,tz-1] = T[ix,iy,iz-1] end
+        if (@threadIdx().x == @blockDim().x) T_l[tx+1,ty,tz] = T[ix+1,iy,iz] end
+        if (@threadIdx().y == @blockDim().y) T_l[tx,ty+1,tz] = T[ix,iy+1,iz] end
+        if (@threadIdx().z == @blockDim().z) T_l[tx,ty,tz+1] = T[ix,iy,iz+1] end
+        @sync_threads()
         dTdt[ix-1, iy-1, iz-1] =
-             _dt * (T[ix, iy, iz] - T_old[ix, iy, iz]) +  _ϕ * (
-                max(0.0, qDx[ix, iy, iz]) * (T[ix,iy,iz] - T[ix-1,iy,iz]) * _dx +
-                min(0.0, qDx[ix+1, iy, iz]) * (T[ix+1,iy,iz] - T[ix,iy,iz]) * _dx +
-                max(0.0, qDy[ix, iy, iz]) * (T[ix,iy,iz] - T[ix,iy-1,iz]) * _dy +
-                min(0.0, qDy[ix, iy+1, iz]) * (T[ix,iy+1,iz] - T[ix,iy,iz]) * _dy +
-                max(0.0, qDz[ix, iy, iz]) * (T[ix,iy,iz] - T[ix,iy,iz-1]) * _dz +
-                min(0.0, qDz[ix, iy, iz+1]) * (T[ix,iy,iz+1] - T[ix,iy,iz]) * _dz
+             _dt * (T_l[tx, ty, tz] - T_old[ix, iy, iz]) +  _ϕ * (
+                max(0.0, qDx[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx-1,ty,tz]) * _dx +
+                min(0.0, qDx[ix+1, iy, iz]) * (T_l[tx+1,ty,tz] - T_l[tx,ty,tz]) * _dx +
+                max(0.0, qDy[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty-1,tz]) * _dy +
+                min(0.0, qDy[ix, iy+1, iz]) * (T_l[tx,ty+1,tz] - T_l[tx,ty,tz]) * _dy +
+                max(0.0, qDz[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty,tz-1]) * _dz +
+                min(0.0, qDz[ix, iy, iz+1]) * (T_l[tx,ty,tz+1] - T_l[tx,ty,tz]) * _dz
             )
     end
     return nothing
@@ -289,7 +296,7 @@ function compute_temp_3D!(
         T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
     )
     @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(T)) computedTdt_3D!(
-        dTdt, T, T_old, qDx, qDy, qDz, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _ϕ
+        dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
     )
     @parallel blocks threads update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
     @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
