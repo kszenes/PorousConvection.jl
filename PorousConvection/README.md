@@ -5,9 +5,14 @@
 ## Theory
 
 ### Introduction
-In this project, we implement a 3D multi-XPU solver for the convection of a fluid due to temperature through a porous media. This is a procees that is of particular interest when modelling geophysics.
+In this project, we implement an 3D multi-XPU fully-implicit solver for the convection of a fluid due to temperature through a porous media using the pseudo-transient method.
+This is a procees that is of particular interest when modelling geophysics.
 
 ### Equations
+The PDE that is being solved is given by the following system
+
+It is obtained 
+
 
 
 ### Numerical Methods

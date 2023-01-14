@@ -1,4 +1,4 @@
-module stencil3D_CUDA
+module stencil3D_CUDA_original
 
 export compute_flux_p_3D!,
     compute_Pf_3D!,
