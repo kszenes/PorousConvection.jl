@@ -61,27 +61,27 @@ Computes Darcy flux.
         if (ix < nx && tx == @blockDim().x) P_l[tx+1,ty,tz] = Pf[ix+1,iy,iz] end
         if (iy < ny && ty == @blockDim().y) P_l[tx,ty+1,tz] = Pf[ix,iy+1,iz] end
         if (iz < nz && tz == @blockDim().z) P_l[tx,ty,tz+1] = Pf[ix,iy,iz+1] end
-    end
-    @sync_threads()
+        @sync_threads()
 
-    if (ix < nx && iy <= ny && iz <= nz)
-        qDx[ix+1,iy,iz] = qDx[ix+1,iy,iz] - _1_θ_dτ *
-                            (qDx[ix+1,iy,iz] + k_ηf * _dx *
-                            (P_l[tx+1,ty,tz]-P_l[tx,ty,tz])
-                          )
-    end
-    if (ix <= nx && iy < ny && iz <= nz)
-        qDy[ix,iy+1,iz] = qDy[ix,iy+1,iz] - _1_θ_dτ * (
-                            qDy[ix,iy+1,iz] + k_ηf * _dy *
-                            (P_l[tx,ty+1,tz]-P_l[tx,ty,tz])
-                          )
-    end
-    if (ix <= nx && iy <= ny && iz < nz)
-        qDz[ix,iy,iz+1] = qDz[ix,iy,iz+1] - _1_θ_dτ * (
-                            qDz[ix,iy,iz+1] + k_ηf * _dz *
-                            (P_l[tx,ty,tz+1]-P_l[tx,ty,tz]) -
-                            αρg * 0.5 * (T[ix,iy,iz+1] + T[ix,iy,iz])
-                          )
+        if (ix < nx && iy <= ny && iz <= nz)
+            qDx[ix+1,iy,iz] = qDx[ix+1,iy,iz] - _1_θ_dτ *
+                                (qDx[ix+1,iy,iz] + k_ηf * _dx *
+                                (P_l[tx+1,ty,tz]-P_l[tx,ty,tz])
+                            )
+        end
+        if (ix <= nx && iy < ny && iz <= nz)
+            qDy[ix,iy+1,iz] = qDy[ix,iy+1,iz] - _1_θ_dτ * (
+                                qDy[ix,iy+1,iz] + k_ηf * _dy *
+                                (P_l[tx,ty+1,tz]-P_l[tx,ty,tz])
+                            )
+        end
+        if (ix <= nx && iy <= ny && iz < nz)
+            qDz[ix,iy,iz+1] = qDz[ix,iy,iz+1] - _1_θ_dτ * (
+                                qDz[ix,iy,iz+1] + k_ηf * _dz *
+                                (P_l[tx,ty,tz+1]-P_l[tx,ty,tz]) -
+                                αρg * 0.5 * (T[ix,iy,iz+1] + T[ix,iy,iz])
+                            )
+        end
     end
     return nothing
 end
@@ -172,30 +172,30 @@ Compute pressure fluxes and gradients.
     # Load data into shared memory
     if (ix <= nx - 1 && iy <= ny - 1 && iz <= nz - 1)
         T_l[tx,ty,tz] = T[ix+1,iy+1,iz+1]
-        T_l[tx-1,ty,tz] = T[ix,iy+1,iz+1]
-        T_l[tx,ty,tz-1] = T[ix+1,iy+1,iz]
-        T_l[tx,ty-1,tz] = T[ix+1,iy,iz+1]
-    end
-    @sync_threads()
+        if (@threadIdx().x == 1) T_l[tx-1,ty,tz] = T[ix,iy+1,iz+1] end
+        if (@threadIdx().y == 1) T_l[tx,ty-1,tz] = T[ix+1,iy,iz+1] end
+        if (@threadIdx().z == 1) T_l[tx,ty,tz-1] = T[ix+1,iy+1,iz] end
+        @sync_threads()
 
-    if (ix <= nx-1 && iy <= ny-2 && iz <= nz-2)
-        qTx[ix,iy,iz] = qTx[ix,iy,iz] -  _1_θ_dτ_T * (
-                            qTx[ix,iy,iz] + λ_ρCp * _dx *
-                            (T_l[tx,ty,tz] - T_l[tx-1,ty,tz])
-                        )
-        
-    end
-    if (ix <= nx-2 && iy <= ny-1 && iz <= nz-2)
-        qTy[ix,iy,iz] = qTy[ix,iy,iz] - _1_θ_dτ_T * (
-                            qTy[ix,iy,iz] + λ_ρCp * _dy *
-                            (T_l[tx,ty,tz] - T_l[tx,ty-1,tz])
-                        ) 
-    end
-    if (ix <= nx-2 && iy <= ny-2 && iz <= nz-1)
-        qTz[ix,iy,iz] = qTz[ix,iy,iz] - _1_θ_dτ_T * (
-                            qTz[ix,iy,iz] + λ_ρCp * _dz *
-                            (T_l[tx,ty,tz] - T_l[tx,ty,tz-1])
-                        ) 
+        if (ix <= nx-1 && iy <= ny-2 && iz <= nz-2)
+            qTx[ix,iy,iz] = qTx[ix,iy,iz] -  _1_θ_dτ_T * (
+                                qTx[ix,iy,iz] + λ_ρCp * _dx *
+                                (T_l[tx,ty,tz] - T_l[tx-1,ty,tz])
+                            )
+            
+        end
+        if (ix <= nx-2 && iy <= ny-1 && iz <= nz-2)
+            qTy[ix,iy,iz] = qTy[ix,iy,iz] - _1_θ_dτ_T * (
+                                qTy[ix,iy,iz] + λ_ρCp * _dy *
+                                (T_l[tx,ty,tz] - T_l[tx,ty-1,tz])
+                            ) 
+        end
+        if (ix <= nx-2 && iy <= ny-2 && iz <= nz-1)
+            qTz[ix,iy,iz] = qTz[ix,iy,iz] - _1_θ_dτ_T * (
+                                qTz[ix,iy,iz] + λ_ρCp * _dz *
+                                (T_l[tx,ty,tz] - T_l[tx,ty,tz-1])
+                            ) 
+        end
     end
 
     return nothing
