@@ -125,8 +125,14 @@ end
 """
 Updates pressure using Darcy flux.
 """
-@parallel function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
-    @all(Pf) = @all(Pf) - (@d_xa(qDx) * _dx + @d_ya(qDy) * _dy + @d_za(qDz) * _dz) * _β_dτ
+@parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    nx, ny, nz = size(Pf)
+    if (ix <= nx && iy <= ny && iz <= nz)
+        Pf[ix,iy,iz] = Pf[ix,iy,iz] -   _β_dτ * (
+            (qDx[ix+1,iy,iz] - qDx[ix,iy,iz]) * _dx +
+            (qDy[ix,iy+1,iz] - qDy[ix,iy,iz]) * _dy +
+            (qDz[ix,iy,iz+1] - qDz[ix,iy,iz]) * _dz)
+    end
     return nothing
 end
 
@@ -139,14 +145,14 @@ function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
 )
     # TODO: change threads values
-    threads = (8, 4, 4)
+    threads = (16, 4, 4)
     # blocks = size(Pf) .÷ threads
     blocks  = (size(Pf) .+ threads .- 1) .÷ threads
     @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
     # threads = (5, 5, 5) # BUG: Only works with same number of threads in each dim
     # blocks  = (size(Pf) .+ threads .- 1) .÷ threads
     # @parallel blocks threads shmem=3*(prod(threads.+1))*sizeof(eltype(Pf)) compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
-    @parallel compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     return nothing
 end
 
@@ -288,7 +294,7 @@ function compute_temp_3D!(
     _1_θ_dτ_T,
     _ϕ,
 )
-    threads = (8, 4, 4)
+    threads = (16, 4, 4)
     # blocks = size(T) .÷ threads
     blocks  = (size(T) .+ threads .- 1) .÷ threads
 
