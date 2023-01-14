@@ -164,37 +164,37 @@ Compute pressure fluxes and gradients.
 )
     nx, ny, nz = size(T)
 
-    tx = @threadIdx().x
-    ty = @threadIdx().y
-    tz = @threadIdx().z
+    tx = @threadIdx().x + 1
+    ty = @threadIdx().y + 1
+    tz = @threadIdx().z + 1
 
     T_l = @sharedMem(eltype(T), (@blockDim().x+1, @blockDim().y+1, @blockDim().z+1))
     # Load data into shared memory
     if (ix <= nx - 1 && iy <= ny - 1 && iz <= nz - 1)
-        T_l[tx+1,ty+1,tz+1] = T[ix+1,iy+1,iz+1]
-        T_l[tx,ty+1,tz+1] = T[ix,iy+1,iz+1]
-        T_l[tx+1,ty+1,tz] = T[ix+1,iy+1,iz]
-        T_l[tx+1,ty,tz+1] = T[ix+1,iy,iz+1]
+        T_l[tx,ty,tz] = T[ix+1,iy+1,iz+1]
+        T_l[tx-1,ty,tz] = T[ix,iy+1,iz+1]
+        T_l[tx,ty,tz-1] = T[ix+1,iy+1,iz]
+        T_l[tx,ty-1,tz] = T[ix+1,iy,iz+1]
     end
     @sync_threads()
 
     if (ix <= nx-1 && iy <= ny-2 && iz <= nz-2)
         qTx[ix,iy,iz] = qTx[ix,iy,iz] -  _1_θ_dτ_T * (
                             qTx[ix,iy,iz] + λ_ρCp * _dx *
-                            (T_l[tx+1,ty+1,tz+1] - T_l[tx,ty+1,tz+1])
+                            (T_l[tx,ty,tz] - T_l[tx-1,ty,tz])
                         )
         
     end
     if (ix <= nx-2 && iy <= ny-1 && iz <= nz-2)
         qTy[ix,iy,iz] = qTy[ix,iy,iz] - _1_θ_dτ_T * (
                             qTy[ix,iy,iz] + λ_ρCp * _dy *
-                            (T_l[tx+1,ty+1,tz+1] - T_l[tx+1,ty,tz+1])
+                            (T_l[tx,ty,tz] - T_l[tx,ty-1,tz])
                         ) 
     end
     if (ix <= nx-2 && iy <= ny-2 && iz <= nz-1)
         qTz[ix,iy,iz] = qTz[ix,iy,iz] - _1_θ_dτ_T * (
                             qTz[ix,iy,iz] + λ_ρCp * _dz *
-                            (T_l[tx+1,ty+1,tz+1] - T_l[tx+1,ty+1,tz])
+                            (T_l[tx,ty,tz] - T_l[tx,ty,tz-1])
                         ) 
     end
 
@@ -215,24 +215,26 @@ Compute dTdt expression.
 
     T_l = @sharedMem(eltype(T), (@blockDim().x+2, @blockDim().y+2, @blockDim().z+2))
 
-    if (ix <= nx && iy <= ny && iz <= nz) T_l[tx, ty, tz] = T[ix, iy, iz] end
-    if (1 < ix < nx && 1 < iy < ny && 1 < iz < nz)
-        if (@threadIdx().x == 1) T_l[tx-1,ty,tz] = T[ix-1,iy,iz] end
-        if (@threadIdx().y == 1) T_l[tx,ty-1,tz] = T[ix,iy-1,iz] end
-        if (@threadIdx().z == 1) T_l[tx,ty,tz-1] = T[ix,iy,iz-1] end
-        if (@threadIdx().x == @blockDim().x) T_l[tx+1,ty,tz] = T[ix+1,iy,iz] end
-        if (@threadIdx().y == @blockDim().y) T_l[tx,ty+1,tz] = T[ix,iy+1,iz] end
-        if (@threadIdx().z == @blockDim().z) T_l[tx,ty,tz+1] = T[ix,iy,iz+1] end
-        @sync_threads()
-        dTdt[ix-1, iy-1, iz-1] =
-             _dt * (T_l[tx, ty, tz] - T_old[ix, iy, iz]) +  _ϕ * (
-                max(0.0, qDx[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx-1,ty,tz]) * _dx +
-                min(0.0, qDx[ix+1, iy, iz]) * (T_l[tx+1,ty,tz] - T_l[tx,ty,tz]) * _dx +
-                max(0.0, qDy[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty-1,tz]) * _dy +
-                min(0.0, qDy[ix, iy+1, iz]) * (T_l[tx,ty+1,tz] - T_l[tx,ty,tz]) * _dy +
-                max(0.0, qDz[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty,tz-1]) * _dz +
-                min(0.0, qDz[ix, iy, iz+1]) * (T_l[tx,ty,tz+1] - T_l[tx,ty,tz]) * _dz
-            )
+    if (ix <= nx && iy <= ny && iz <= nz)
+        T_l[tx, ty, tz] = T[ix, iy, iz]
+        if (1 < ix < nx && 1 < iy < ny && 1 < iz < nz)
+            if (@threadIdx().x == 1) T_l[tx-1,ty,tz] = T[ix-1,iy,iz] end
+            if (@threadIdx().y == 1) T_l[tx,ty-1,tz] = T[ix,iy-1,iz] end
+            if (@threadIdx().z == 1) T_l[tx,ty,tz-1] = T[ix,iy,iz-1] end
+            if (@threadIdx().x == @blockDim().x) T_l[tx+1,ty,tz] = T[ix+1,iy,iz] end
+            if (@threadIdx().y == @blockDim().y) T_l[tx,ty+1,tz] = T[ix,iy+1,iz] end
+            if (@threadIdx().z == @blockDim().z) T_l[tx,ty,tz+1] = T[ix,iy,iz+1] end
+            @sync_threads()
+            dTdt[ix-1, iy-1, iz-1] =
+                _dt * (T_l[tx, ty, tz] - T_old[ix, iy, iz]) +  _ϕ * (
+                    max(0.0, qDx[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx-1,ty,tz]) * _dx +
+                    min(0.0, qDx[ix+1, iy, iz]) * (T_l[tx+1,ty,tz] - T_l[tx,ty,tz]) * _dx +
+                    max(0.0, qDy[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty-1,tz]) * _dy +
+                    min(0.0, qDy[ix, iy+1, iz]) * (T_l[tx,ty+1,tz] - T_l[tx,ty,tz]) * _dy +
+                    max(0.0, qDz[ix, iy, iz]) * (T_l[tx,ty,tz] - T_l[tx,ty,tz-1]) * _dz +
+                    min(0.0, qDz[ix, iy, iz+1]) * (T_l[tx,ty,tz+1] - T_l[tx,ty,tz]) * _dz
+                )
+        end
     end
     return nothing
 end
