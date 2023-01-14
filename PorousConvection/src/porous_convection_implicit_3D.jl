@@ -45,7 +45,8 @@ function porous_convection_implicit_3D(;
     _1_θ_dτ_D = 1.0 ./ (1.0 + θ_dτ_D)
     # --- array initialisation ---
     # Pressure
-    Pf = @zeros(nx, ny, nz)
+     # NOTE: extra size for kernel compute_flux_pX_3D
+    Pf = @zeros(nx + 1, ny + 1, nz + 1)
     qDx = @zeros(nx + 1, ny, nz)
     qDy = @zeros(nx, ny + 1, nz)
     qDz = @zeros(nx, ny, nz + 1)
