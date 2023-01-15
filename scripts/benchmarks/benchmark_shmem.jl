@@ -8,7 +8,7 @@ using Printf, BenchmarkTools
 
 @printf("Benchmarking Shared Memory Implementation\n")
 
-nz = 255 
+nz = 255
 nx, ny = 2 * (nz + 1) - 1, nz
 @show nx, ny, nz
 
@@ -76,7 +76,7 @@ _1_dt_β_dτ_T = 1.0 / (1.0 / dt + β_dτ_T)
 
 @printf("=== Shared Memory ===\n")
 threads = (32, 4, 4)
-blocks  = (size(T) .+ threads .- 1) .÷ threads
+blocks = (size(T) .+ threads .- 1) .÷ threads
 
 base_size = prod(size(Pf)) * sizeof(Float64) * 1e-9
 kernel_rw = [8, 5, 7, 6, 6] # Read/Writes
@@ -85,13 +85,17 @@ T_effs = []
 timings = []
 # --- Pressure ---
 time = @belapsed begin
-    @parallel $blocks $threads shmem=(prod($threads.+1))*sizeof(eltype($Pf)) SHMEM.compute_flux_p_3D!($qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg)
+    @parallel $blocks $threads shmem = (prod($threads .+ 1)) * sizeof(eltype($Pf)) SHMEM.compute_flux_p_3D!(
+        $qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg
+    )
 end
 push!(timings, time)
 push!(T_effs, A_effs[1] / time)
 @printf("compute_flux_p_3D!: %f [s] (%f [GB/s])\n", time, T_effs[1])
 time = @belapsed begin
-    @parallel $blocks $threads SHMEM.update_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
+    @parallel $blocks $threads SHMEM.update_Pf_3D!(
+        $Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D
+    )
 end
 push!(timings, time)
 push!(T_effs, A_effs[2] / time)
@@ -99,7 +103,7 @@ push!(T_effs, A_effs[2] / time)
 
 # --- Temperature ---
 time = @belapsed begin
-    @parallel $blocks $threads shmem=prod($threads.+1)*sizeof(eltype($T)) SHMEM.compute_flux_T_3D!(
+    @parallel $blocks $threads shmem = prod($threads .+ 1) * sizeof(eltype($T)) SHMEM.compute_flux_T_3D!(
         $T, $qTx, $qTy, $qTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
     )
 end
@@ -108,7 +112,7 @@ push!(T_effs, A_effs[3] / time)
 @printf("compute_flux_T_3D!: %f [s] (%f GB/s)\n", time, T_effs[3])
 
 time = @belapsed begin
-    @parallel $blocks $threads shmem=prod($threads.+2)*sizeof(eltype($T)) SHMEM.computedTdt_3D!(
+    @parallel $blocks $threads shmem = prod($threads .+ 2) * sizeof(eltype($T)) SHMEM.computedTdt_3D!(
         $dTdt, $T, $T_old, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_dt, $_ϕ
     )
 end
@@ -117,7 +121,9 @@ push!(T_effs, A_effs[4] / time)
 @printf("computedTdt!: %f [s] (%f GB/s)\n", time, T_effs[4])
 
 time = @belapsed begin
-    @parallel $blocks $threads SHMEM.update_T_3D!($T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T)
+    @parallel $blocks $threads SHMEM.update_T_3D!(
+        $T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T
+    )
 end
 push!(timings, time)
 push!(T_effs, A_effs[5] / time)
@@ -126,7 +132,9 @@ push!(T_effs, A_effs[5] / time)
 @printf("\n=== Original ===\n")
 # --- Pressure ---
 time = @belapsed begin
-    @parallel OG.compute_flux_p_3D!($qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg)
+    @parallel OG.compute_flux_p_3D!(
+        $qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg
+    )
 end
 @printf("compute_flux_p_3D!: %f [s]\n", time)
 time = @belapsed begin
@@ -137,7 +145,18 @@ end
 # --- Temperature ---
 time = @belapsed begin
     @parallel OG.compute_flux_T_3D!(
-        $T, $qTx, $qTy, $qTz, $gradTx, $gradTy, $gradTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
+        $T,
+        $qTx,
+        $qTy,
+        $qTz,
+        $gradTx,
+        $gradTy,
+        $gradTz,
+        $λ_ρCp,
+        $_dx,
+        $_dy,
+        $_dz,
+        $_1_θ_dτ_T,
     )
 end
 @printf("compute_flux_T_3D!: %f [s]\n", time)
@@ -154,4 +173,3 @@ end
 time = @belapsed begin
     @parallel (1:size($T, 2), 1:size($T, 3)) OG.bc_xz!($T)
 end
-

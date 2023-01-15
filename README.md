@@ -2,9 +2,8 @@
 
 [![Build Status](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml?query=branch%3Amain)
 # TODO:
-- Git actions
 - Test
-- Documentation
+- Documentation -> Add docsting ot each file
 - Better explanation for exclusive use of GPU implementation
 - Distributed Weak scaling
 - Few words about output animation
@@ -101,14 +100,14 @@ PorousConvection.jl
 The benchmarks were performed on Piz Daint supercomputer which is a single NVIDIA® Tesla® P100 with 16GB of memory per node.
 
 #### Block Size
-The performance characteristic of GPU kernels are highly dependent on correct selection of the block size. In the following benchmark, we evaluate the total runtime of the 5 stencil kernels for varying block sizes. This benchmark can be reproduced using the `PorousConvection/scripts/benchmarks/benchmark_block_size.jl` script.
+The performance characteristic of GPU kernels are highly dependent on correct selection of the block size. In the following benchmark, we evaluate the total runtime of the 5 stencil kernels for varying block sizes. This benchmark can be reproduced using [this](scripts/benchmarks/benchmark_block_size.jl) script.
 
 Thus we select the (32, 4, 4) block size for all subsequent numerical experiments  as this exhibited the best performance.
 
 ![block_size](docs/block_size_benchmark.png)
 
 #### Speedup
-In this section, we evaluate the speedup achieved in our improved implmentation using shared memory. The following benchmark compares the runtime for each kernel of the 5 kernels between the original and shared memory implementation. The percentage in each bar plot signifies the percentage of speedup. This benchmark may be reproduced using the `PorousConvection/scripts/benchmarks/benchmark_shmem.jl` script.
+In this section, we evaluate the speedup achieved in our improved implmentation using shared memory. The following benchmark compares the runtime for each kernel of the 5 kernels between the original and shared memory implementation. The percentage in each bar plot signifies the percentage of speedup. This benchmark may be reproduced using [this](scripts/benchmarks/benchmark_shmem.jl) script.
 
 
 ![speedup](docs/shared_vs_original_speedup.png)
@@ -117,7 +116,7 @@ As illustrated by the plot, we obtain good speedups for each kernel averaging a 
 
 
 #### Throughput
-In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below.
+In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below. Note that the maximum achieved on the NVIDA P100 is ~550 [GB/s].
 
 ![throughput](docs/throughput.png)
 

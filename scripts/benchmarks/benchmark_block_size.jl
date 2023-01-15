@@ -6,7 +6,7 @@ using Printf, BenchmarkTools
 
 @printf("Benchmarking Optimal Block Size\n")
 
-nz = 255 
+nz = 255
 nx, ny = 2 * (nz + 1) - 1, nz
 @show nx, ny, nz
 
@@ -46,8 +46,8 @@ qDy = @zeros(nx, ny + 1, nz)
 qDz = @zeros(nx, ny, nz + 1)
 # Temperature
 T = Data.Array([
-ΔT * exp(-xc[ix]^2 - (yc[iy] - ly / 2)^2 - (zc[iz] + lz / 2)^2) for ix in 1:nx,
-iy in 1:ny, iz in 1:nz
+    ΔT * exp(-xc[ix]^2 - (yc[iy] - ly / 2)^2 - (zc[iz] + lz / 2)^2) for ix in 1:nx,
+    iy in 1:ny, iz in 1:nz
 ])
 T[:, :, 1] .= ΔT / 2
 T[:, :, end] .= -ΔT / 2
@@ -71,48 +71,54 @@ block_sizes = [(32, 4, 4), (16, 8, 8), (16, 4, 4), (8, 8, 8), (8, 4, 4)]
 
 tot_time = []
 for threads in block_sizes
-  cur_time = 0.0
-  @printf("\n")
-  @show threads
-  blocks  = (size(T) .+ threads .- 1) .÷ threads
-  # --- Pressure ---
-  time = @belapsed begin
-    @parallel $blocks $threads shmem=(prod($threads.+1))*sizeof(eltype($Pf)) compute_flux_p_3D!($qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg)
-  end
-  @printf("compute_flux_p_3D!: %f [s]\n", time)
-  cur_time += time
+    cur_time = 0.0
+    @printf("\n")
+    @show threads
+    blocks = (size(T) .+ threads .- 1) .÷ threads
+    # --- Pressure ---
+    time = @belapsed begin
+        @parallel $blocks $threads shmem = (prod($threads .+ 1)) * sizeof(eltype($Pf)) compute_flux_p_3D!(
+            $qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg
+        )
+    end
+    @printf("compute_flux_p_3D!: %f [s]\n", time)
+    cur_time += time
 
-  time = @belapsed begin
-    @parallel $blocks $threads update_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
-  end
-  @printf("update_Pf_3D!: %f [s]\n", time)
-  cur_time += time
+    time = @belapsed begin
+        @parallel $blocks $threads update_Pf_3D!(
+            $Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D
+        )
+    end
+    @printf("update_Pf_3D!: %f [s]\n", time)
+    cur_time += time
 
-  # --- Temperature ---
-  time = @belapsed begin
-    @parallel $blocks $threads shmem=prod($threads.+1)*sizeof(eltype($T)) compute_flux_T_3D!(
-      $T, $qTx, $qTy, $qTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
-    )
-  end
-  @printf("compute_flux_T_3D!: %f [s]\n", time)
-  cur_time += time
+    # --- Temperature ---
+    time = @belapsed begin
+        @parallel $blocks $threads shmem = prod($threads .+ 1) * sizeof(eltype($T)) compute_flux_T_3D!(
+            $T, $qTx, $qTy, $qTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
+        )
+    end
+    @printf("compute_flux_T_3D!: %f [s]\n", time)
+    cur_time += time
 
-  time = @belapsed begin
-    @parallel $blocks $threads shmem=prod($threads.+2)*sizeof(eltype($T)) computedTdt_3D!(
-      $dTdt, $T, $T_old, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_dt, $_ϕ
-    )
-  end
-  @printf("computedTdt!: %f [s]\n", time)
-  cur_time += time
+    time = @belapsed begin
+        @parallel $blocks $threads shmem = prod($threads .+ 2) * sizeof(eltype($T)) computedTdt_3D!(
+            $dTdt, $T, $T_old, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_dt, $_ϕ
+        )
+    end
+    @printf("computedTdt!: %f [s]\n", time)
+    cur_time += time
 
-  time = @belapsed begin
-    @parallel $blocks $threads update_T_3D!($T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T)
-  end
-  @printf("update_T_3D!: %f [s]\n", time)
-  cur_time += time
+    time = @belapsed begin
+        @parallel $blocks $threads update_T_3D!(
+            $T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T
+        )
+    end
+    @printf("update_T_3D!: %f [s]\n", time)
+    cur_time += time
 
-  push!(tot_time, cur_time)
-  @show cur_time
+    push!(tot_time, cur_time)
+    @show cur_time
 end
 
 @show block_sizes

@@ -1,6 +1,6 @@
 using ImplicitGlobalGrid
 using Printf
-import MPI
+using MPI: MPI
 MPI.Init()
 
 max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
@@ -26,7 +26,7 @@ function porous_convection_implicit_3D(;
     # numerics
     ϵtol = 1e-6
     nx, ny = 2 * (nz + 1) - 1, nz
-    me, dims = init_global_grid(nx, ny, nz, init_MPI=false)  # init global grid and more
+    me, dims = init_global_grid(nx, ny, nz; init_MPI=false)  # init global grid and more
     # maxiter = 10
     maxiter = 10max(nx_g(), ny_g())
     b_width = (8, 8, 4)                       # for comm / comp overlap
@@ -38,9 +38,6 @@ function porous_convection_implicit_3D(;
     dy = ly / ny_g()
     dz = lz / nz_g()
     _dx, _dy, _dz = 1.0 / dx, 1.0 / dy, 1.0 / dz
-    xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx_g())
-    yc = LinRange(dy / 2, ly - dy / 2, ny_g())
-    zc = LinRange(-ly + dy / 2, -dy / 2, ny_g())
     θ_dτ_D = max(lx, ly, lz) / re_D / cfl / min(dx, dy, dz)
     β_dτ_D = (re_D * k_ηf) / (cfl * min(dx, dy, dz) * max(lx, ly, lz))
     _β_dτ_D = 1.0 ./ β_dτ_D
@@ -88,14 +85,18 @@ function porous_convection_implicit_3D(;
     qTy = @zeros(nx - 2, ny - 1, nz - 2)
     qTz = @zeros(nx - 2, ny - 2, nz - 1)
     dTdt = @zeros(nx - 2, ny - 2, nz - 2)
+
+    # Residuals
     r_Pf = zeros(nx, ny, nz)
     r_T = zeros(nx - 2, ny - 2, nz - 2)
 
+    # Kernel topology
     threads = (32, 4, 4)
-    blocks  = (size(Pf) .+ threads .- 1) .÷ threads
+    blocks = (size(Pf) .+ threads .- 1) .÷ threads
 
     # Disable garbace collection for accurate benchmarking
-    GC.gc(); GC.enable(false)
+    GC.gc()
+    GC.enable(false)
     t_tic = 0.0
     t_toc = 0.0
     niter = 0
@@ -133,21 +134,24 @@ function porous_convection_implicit_3D(;
             end
             # --- Pressure ---
             # @hide_communication b_width begin
-                @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg)
-                update_halo!(qDx, qDy, qDz)
-                # @parallel compute_flux_p_3D!(
-                #     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg
-                # )
+            @parallel blocks threads shmem = (prod(threads .+ 1)) * sizeof(eltype(Pf)) compute_flux_p_3D!(
+                qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg
+            )
+            update_halo!(qDx, qDy, qDz)
+            # @parallel compute_flux_p_3D!(
+            #     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ_D, αρg
+            # )
             # end
 
             # @hide_communication b_width begin
-                # @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
-                @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
-                update_halo!(Pf)
+            # @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
+            @parallel blocks threads update_Pf_3D!(
+                Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D
+            )
+            update_halo!(Pf)
             # end
 
-            
-            @parallel blocks threads shmem=prod(threads.+1)*sizeof(eltype(T)) compute_flux_T_3D!(
+            @parallel blocks threads shmem = prod(threads .+ 1) * sizeof(eltype(T)) compute_flux_T_3D!(
                 T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
             )
             # @parallel compute_flux_T_3D!(
@@ -159,14 +163,16 @@ function porous_convection_implicit_3D(;
             # )
             # --- Temperature ---
             # @hide_communication b_width begin
-                @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(T)) computedTdt_3D!(
-                    dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
-                )
-                @parallel blocks threads update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
-                # @parallel update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
-                @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
-                @parallel (1:size(T, 1), 1:size(T, 3)) bc_yz!(T)
-                update_halo!(T)
+            @parallel blocks threads shmem = prod(threads .+ 2) * sizeof(eltype(T)) computedTdt_3D!(
+                dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
+            )
+            @parallel blocks threads update_T_3D!(
+                T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T
+            )
+            # @parallel update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
+            @parallel (1:size(T, 2), 1:size(T, 3)) bc_xz!(T)
+            @parallel (1:size(T, 1), 1:size(T, 3)) bc_yz!(T)
+            update_halo!(T)
             # end
             niter += 1
             if iter % ncheck == 0
@@ -227,11 +233,10 @@ function porous_convection_implicit_3D(;
     A_eff = 32 * nx_g() * ny_g() * nz_g() * sizeof(Float64) * 1e-9
     t_it = t_toc / niter
     T_eff = A_eff / t_it
-    
-    
+
     @show t_it, niter
     @show T_eff
-    GC.enable(true);
+    GC.enable(true)
     finalize_global_grid(; finalize_MPI=false)
     return T_eff, t_it
 end

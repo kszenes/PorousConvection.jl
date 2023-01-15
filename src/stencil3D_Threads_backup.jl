@@ -1,4 +1,4 @@
-module stencil3D_Threads
+module stencil3D_Threads_original
 
 export compute_flux_p_3D!,
     update_Pf_3D!,

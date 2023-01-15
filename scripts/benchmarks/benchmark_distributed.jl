@@ -30,7 +30,9 @@ default(;
 
 include("../src/porous_convection3D_xpu.jl")
 
-T_eff, t_it = porous_convection_implicit_3D(nz=255, nt=50, nvis=1000, debug=false, save=false)
+T_eff, t_it = porous_convection_implicit_3D(;
+    nz=255, nt=50, nvis=1000, debug=false, save=false
+)
 @show t_it
 
 # T_eff, t_it = porous_convection_implicit_3D(nz=127, nt=100, nvis=1000, debug=false, save=false)

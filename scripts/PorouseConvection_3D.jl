@@ -25,5 +25,7 @@ default(;
 include("../src/porous_convection_implicit_3D.jl")
 
 nz = 63
-porous_convection_implicit_3D(; nx=2*(nz+1)-1, ny=nz, nz=nz, nvis=50, nt=500, save=true)
+porous_convection_implicit_3D(;
+    nx=2 * (nz + 1) - 1, ny=nz, nz=nz, nvis=50, nt=500, save=true
+)
 # porous_convection_implicit_3D(; nx=255, ny=127, nz=127, nvis=50, nt=2000, save=true)
