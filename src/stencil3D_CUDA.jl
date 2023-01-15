@@ -17,7 +17,7 @@ using ParallelStencil.FiniteDifferences3D
 """
     compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
 
-Computes the Darcy Flux for the pressure:
+Computes the Darcy flux for the pressure using the formula:
 θ_D * ∂qD/∂τ + qD = - k / η * (∇p - ραgT)
 
 Memory transfers: 5 reads + 3 writes = 8 
@@ -123,7 +123,7 @@ end
         T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
     )
 
-Compute Temperature Fluxes.
+Computes the temperature fluxes using the formula:
 qT = - λ * ∇T / (ρ * c_p)
 
 Memory transfers: 4 reads + 3 writes = 7
@@ -181,7 +181,7 @@ end
         dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
     )
 
-Compute dTdt Expression:
+Compute dTdt using the fomrula:
 dTdt = (T - T_old) / dt + qD ⋅ ∇T / ρ
 
 Memory transfers: 5 reads + 1 writes = 6
@@ -253,7 +253,7 @@ end
 """
     update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
 
-Update Temperature
+Updates temperature using the formula:
 ∂T/∂τ + dTdt + ∇ ⋅ qT = 0
 
 Memory transfers: 5 reads + 1 writes = 6
