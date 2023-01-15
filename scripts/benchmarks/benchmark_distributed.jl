@@ -1,9 +1,9 @@
 """
 Weak scaling benchmark comparing shared memory and comm/comp overlap implementation
 """
-using ImplicitGlobalGrid
 
 const USE_GPU = true
+using ImplicitGlobalGrid
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU

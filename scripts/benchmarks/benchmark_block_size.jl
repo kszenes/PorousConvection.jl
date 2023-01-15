@@ -1,13 +1,14 @@
 """
 Benchmark to determine optimal block size.
 """
+
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
 using PorousConvection.stencil3D_CUDA_shmem
 using Printf, BenchmarkTools
 
-@printf("Benchmarking Optimal Block Size\n")
+@printf("=== Benchmarking Optimal Block Size ===\n")
 
 nz = 255
 nx, ny = 2 * (nz + 1) - 1, nz
@@ -129,3 +130,4 @@ end
 
 @printf("Best time for block size: ")
 @show block_sizes[argmin(tot_time)]
+@printf("\n\n")
