@@ -141,8 +141,8 @@ function porous_convection_implicit_3D(;
             # end
 
             # @hide_communication b_width begin
-                # @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
-                @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
+                # @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
+                @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D)
                 update_halo!(Pf)
             # end
 

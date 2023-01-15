@@ -91,11 +91,11 @@ push!(timings, time)
 push!(T_effs, A_effs[1] / time)
 @printf("compute_flux_p_3D!: %f [s] (%f [GB/s])\n", time, T_effs[1])
 time = @belapsed begin
-    @parallel $blocks $threads SHMEM.compute_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
+    @parallel $blocks $threads SHMEM.update_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
 end
 push!(timings, time)
 push!(T_effs, A_effs[2] / time)
-@printf("compute_Pf_3D!: %f [s] (%f [GB/s])\n", time, T_effs[2])
+@printf("update_Pf_3D!: %f [s] (%f [GB/s])\n", time, T_effs[2])
 
 # --- Temperature ---
 time = @belapsed begin
@@ -130,9 +130,9 @@ time = @belapsed begin
 end
 @printf("compute_flux_p_3D!: %f [s]\n", time)
 time = @belapsed begin
-    @parallel OG.compute_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
+    @parallel OG.update_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
 end
-@printf("compute_Pf_3D!: %f [s]\n", time)
+@printf("update_Pf_3D!: %f [s]\n", time)
 
 # --- Temperature ---
 time = @belapsed begin

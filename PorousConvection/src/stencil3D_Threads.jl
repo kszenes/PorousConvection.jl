@@ -1,7 +1,7 @@
 module stencil3D_Threads
 
 export compute_flux_p_3D!,
-    compute_Pf_3D!,
+    update_Pf_3D!,
     compute_pressure_3D!,
     compute_flux_T_3D!,
     computedTdt_3D!,
@@ -30,7 +30,7 @@ end
 """
 Updates pressure using Darcy flux.
 """
-@parallel function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+@parallel function update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     @all(Pf) = @all(Pf) - (@d_xa(qDx) * _dx + @d_ya(qDy) * _dy + @d_za(qDz) * _dz) * _β_dτ
     return nothing
 end
@@ -38,13 +38,13 @@ end
 """
 Helper function which:
     1) Computes Darcy flux using `compute_flux_p_3D!()`
-    2) Updates pressure accordingly using `compute_Pf_3D!()`
+    2) Updates pressure accordingly using `update_Pf_3D!()`
 """
 function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
 )
     @parallel compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
-    @parallel compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @parallel update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     return nothing
 end
 

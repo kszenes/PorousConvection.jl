@@ -23,7 +23,7 @@ include("../src/porous_convection_implicit_3D.jl")
     threads = (2, 2, 2)
     blocks = (n, n, n) .÷ threads
     # Implement sharedMem
-    @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(Pf)) compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @parallel blocks threads shmem=prod(threads.+2)*sizeof(eltype(Pf)) update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     @test all(zeros(n, n) .≈ Array(Pf))
 
     # reference test

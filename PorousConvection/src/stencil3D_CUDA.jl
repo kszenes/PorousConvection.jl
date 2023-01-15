@@ -1,7 +1,7 @@
 module stencil3D_CUDA
 
 export compute_flux_p_3D!,
-    compute_Pf_3D!,
+    update_Pf_3D!,
     compute_pressure_3D!,
     compute_flux_T_3D!,
     computedTdt_3D!,
@@ -13,34 +13,6 @@ export compute_flux_p_3D!,
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
-
-macro all_own(A)
-    esc(:($A[ix,iy,iz]))
-end
-macro inn_own(A)
-    esc(:($A[ix+1,iy+1,iz+1]))
-end
-macro d_xi_own(A)
-    esc(:($A[ix+1, iy+1, iz+1] - $A[ix, iy+1, iz+1]))
-end
-macro d_yi_own(A)
-    esc(:($A[ix+1, iy+1, iz+1] - $A[ix+1, iy, iz+1]))
-end
-macro d_zi_own(A)
-    esc(:($A[ix+1, iy+1, iz+1] - $A[ix+1, iy+1, iz]))
-end
-macro d_xa_own(A)
-    esc(:($A[ix+1, iy, iz] - $A[ix, iy, iz]))
-end
-macro d_ya_own(A)
-    esc(:($A[ix, iy+1, iz] - $A[ix, iy, iz]))
-end
-macro d_za_own(A)
-    esc(:($A[ix, iy, iz+1] - $A[ix, iy, iz]))
-end
-macro av_za_own(A)
-    esc(:($A[ix, iy, iz+1]/2 + $A[ix, iy, iz]/2))
-end
 
 """
 Computes Darcy flux.
@@ -93,7 +65,7 @@ Updates pressure using Darcy flux.
 
 Memory transfers: 4 reads + 1 writes = 5 
 """
-@parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+@parallel_indices (ix, iy, iz) function update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     nx, ny, nz = size(Pf)
     if (ix <= nx && iy <= ny && iz <= nz)
         Pf[ix,iy,iz] = Pf[ix,iy,iz] -   _β_dτ * (
@@ -107,7 +79,7 @@ end
 """
 Helper function which:
     1) Computes Darcy flux using `compute_flux_p_3D!()`
-    2) Updates pressure accordingly using `compute_Pf_3D!()`
+    2) Updates pressure accordingly using `update_Pf_3D!()`
 
 Memory transfers total: 9 reads + 4 writes = 13 
 """
@@ -117,7 +89,7 @@ function compute_pressure_3D!(
     threads = (32, 4, 4)
     blocks  = (size(Pf) .+ threads .- 1) .÷ threads
     @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
-    @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+    @parallel blocks threads update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     return nothing
 end
 

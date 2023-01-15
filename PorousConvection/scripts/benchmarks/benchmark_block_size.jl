@@ -83,9 +83,9 @@ for threads in block_sizes
   cur_time += time
 
   time = @belapsed begin
-    @parallel $blocks $threads compute_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
+    @parallel $blocks $threads update_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
   end
-  @printf("compute_Pf_3D!: %f [s]\n", time)
+  @printf("update_Pf_3D!: %f [s]\n", time)
   cur_time += time
 
   # --- Temperature ---
