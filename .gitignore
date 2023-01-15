@@ -1,2 +1,9 @@
 core*
 .vscode
+.DS_Store
+Manifest.toml
+*.sh
+viz_out
+slurm-*
+*.bin
+
