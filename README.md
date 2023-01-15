@@ -58,12 +58,15 @@ The porous convection process was modelled using the following system of equatio
 $$
 \boldsymbol{q_D} = -\frac{k}{\eta}(\nabla p - \rho_0\alpha\boldsymbol{g}T)
 $$
+
 $$
 \nabla\cdot\boldsymbol{q_D} = 0
 $$
+
 $$
 \boldsymbol{q_T} = -\frac{\lambda}{\rho_0 c_p}\nabla T
 $$
+
 $$
 \frac{\partial T}{\partial t} + \frac{1}{\varphi}\boldsymbol{q_D}\cdot\nabla T + \nabla\cdot\boldsymbol{q_T} = 0
 $$

@@ -108,8 +108,10 @@ function porous_convection_implicit_3D(;
     # Disable garbace collection for accurate benchmarking
     GC.gc()
     GC.enable(false)
+    # timing
     t_tic = 0.0
     t_toc = 0.0
+    t_it = 0.0
     niter = 0
     # Time loop
     for it in 1:nt
@@ -188,7 +190,10 @@ function porous_convection_implicit_3D(;
             niter += 1
             if iter % ncheck == 0
                 # Don't include error computation in timing
-                t_toc += Base.time() - t_tic
+                if (iter == ncheck)
+                    t_toc = Base.time() - t_tic
+                    t_it = t_toc / niter
+                end
 
                 r_Pf .= Array(
                     diff(qDx; dims=1) ./ dx .+ diff(qDy; dims=2) ./ dy .+
@@ -242,7 +247,6 @@ function porous_convection_implicit_3D(;
         end
     end
     A_eff = 32 * nx_g() * ny_g() * nz_g() * sizeof(Float64) * 1e-9
-    t_it = t_toc / niter
     T_eff = A_eff / t_it
 
     @show t_it, niter

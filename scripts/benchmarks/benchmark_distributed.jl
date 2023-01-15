@@ -28,10 +28,10 @@ default(;
     titlefontsize=11,
 )
 
-include("../src/porous_convection3D_xpu.jl")
+include("../../src/porous_convection3D_xpu.jl")
 
 T_eff, t_it = porous_convection_implicit_3D(;
-    nz=255, nt=50, nvis=1000, debug=false, save=false
+    nz=255, nt=1, nvis=1000, debug=false, save=false
 )
 @show t_it
 
