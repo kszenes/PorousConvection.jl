@@ -1,6 +1,7 @@
 """
 Benchmark to compare performance of naive vs share memory implementation.
 """
+
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
@@ -9,7 +10,7 @@ import PorousConvection.stencil3D_CUDA_shmem as SHMEM
 
 using Printf, BenchmarkTools
 
-@printf("Benchmarking Shared Memory Implementation\n")
+@printf("=== Benchmarking Shared Memory Implementation ===\n")
 
 nz = 255
 nx, ny = 2 * (nz + 1) - 1, nz
@@ -176,3 +177,4 @@ end
 time = @belapsed begin
     @parallel (1:size($T, 2), 1:size($T, 3)) OG.bc_xz!($T)
 end
+@printf("\n\n")

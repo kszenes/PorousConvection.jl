@@ -170,19 +170,32 @@ function porous_convection_implicit_3D(;
 
                 # --- Temperature ---
                 @parallel OG.compute_flux_T_3D!(
-                    T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
+                    T,
+                    qTx,
+                    qTy,
+                    qTz,
+                    gradTx,
+                    gradTy,
+                    gradTz,
+                    λ_ρCp,
+                    _dx,
+                    _dy,
+                    _dz,
+                    _1_θ_dτ_T,
                 )
 
                 @parallel OG.computedTdt_3D!(
                     dTdt, T, T_old, gradTx, gradTy, gradTz, qDx, qDy, qDz, _dt, _ϕ
                 )
                 @hide_communication b_width begin
-                    @parallel OG.update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T)
+                    @parallel OG.update_T_3D!(
+                        T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T
+                    )
                     @parallel (1:size(T, 2), 1:size(T, 3)) OG.bc_xz!(T)
                     @parallel (1:size(T, 1), 1:size(T, 3)) OG.bc_yz!(T)
                     update_halo!(T)
                 end
-            else 
+            else
                 # === SHARED MEMORY ===
                 # --- Pressure ---
                 @parallel blocks threads shmem = (prod(threads .+ 1)) * sizeof(eltype(Pf)) SHMEM.compute_flux_p_3D!(

@@ -66,6 +66,11 @@ function porous_convection_implicit_3D(;
     qTx = @zeros(nx - 1, ny - 2, nz - 2)
     qTy = @zeros(nx - 2, ny - 1, nz - 2)
     qTz = @zeros(nx - 2, ny - 2, nz - 1)
+    if !USE_GPU
+        gradTx = @zeros(nx - 1, ny - 2, nz - 2)
+        gradTy = @zeros(nx - 2, ny - 1, nz - 2)
+        gradTz = @zeros(nx - 2, ny - 2, nz - 1)
+    end
     dTdt = @zeros(nx - 2, ny - 2, nz - 2)
     # Residuals
     r_Pf = zeros(nx, ny, nz)
@@ -104,25 +109,50 @@ function porous_convection_implicit_3D(;
                 Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ_D, k_ηf, _1_θ_dτ_D, αρg
             )
             # --- Temperature ---
-            compute_temp_3D!(
-                T,
-                T_old,
-                dTdt,
-                qTx,
-                qTy,
-                qTz,
-                qDx,
-                qDy,
-                qDz,
-                _dx,
-                _dy,
-                _dz,
-                _dt,
-                _1_dt_β_dτ_T,
-                λ_ρCp,
-                _1_θ_dτ_T,
-                _ϕ,
-            )
+            if USE_GPU
+                compute_temp_3D!(
+                    T,
+                    T_old,
+                    dTdt,
+                    qTx,
+                    qTy,
+                    qTz,
+                    qDx,
+                    qDy,
+                    qDz,
+                    _dx,
+                    _dy,
+                    _dz,
+                    _dt,
+                    _1_dt_β_dτ_T,
+                    λ_ρCp,
+                    _1_θ_dτ_T,
+                    _ϕ,
+                )
+            else
+                compute_temp_3D!(
+                    T,
+                    T_old,
+                    dTdt,
+                    qTx,
+                    qTy,
+                    qTz,
+                    gradTx,
+                    gradTy,
+                    gradTz,
+                    qDx,
+                    qDy,
+                    qDz,
+                    _dx,
+                    _dy,
+                    _dz,
+                    _dt,
+                    _1_dt_β_dτ_T,
+                    λ_ρCp,
+                    _1_θ_dτ_T,
+                    _ϕ,
+                )
+            end
             if iter % ncheck == 0
                 r_Pf .= Array(
                     diff(qDx; dims=1) ./ dx .+ diff(qDy; dims=2) ./ dy .+
