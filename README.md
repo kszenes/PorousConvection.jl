@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-In this project, we implement a 3D multi-XPU finite-difference solver for the convection of a fluid due to temperature through a porous media. This is a process that is of particular interest when modeling geophysical processes.
+In this project, we implement a 3D multi-XPU finite-difference solver for the convection of a fluid due to temperature through a porous medium. This process is of particular interest when modeling geophysical events.
 
 The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl), for the stencil computations, and [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl), for the distributed computation, and achieves good performance due to the explicit use of shared memory to decrease the number of global memory accesses.
 
@@ -33,6 +33,7 @@ The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/
 ### Installation
 ```
 git clone https://github.com/kszenes/PorousConvection.jl
+cd PorousConvection.jl
 julia --project=.
 julia> using Pkg; Pkg.instantiate()
 ```
@@ -71,7 +72,7 @@ The first equation represents the mass balance using two approximations:
 - Darcy's law: assumes a linear dependence between the mass flux and the pressure gradient.
 - Boussinesq approximation which models buoyancy by neglecting all contributions of density differences that are not weighted by the gravitational term $g$. This ends up being a good approximation as the terms containing $g$ are dominant.
 
-?The second equation represents the incompressibility of the fluid
+???The second equation represents the incompressibility of the fluid
 The third equation models the heat flux using Fourier's law.
 The last equation represents the energy equation.
 
@@ -90,7 +91,7 @@ These are solved using a conservative finite-differences scheme on a staggered g
 
 ## Implementation
 
-The method consists of essentially 5 kernels for computing the various fields (as well as 2 additional kernels for implementing the boundary conditions). The 5 kernels compute the following fields:
+Our implementation consists of essentially 5 kernels for computing the various fields (as well as 2 additional kernels for implementing the boundary conditions). The 5 kernels compute the following fields:
 - Pressure kernels:
   - `compute_flux_p_3D!`: Darcy Flux
   - `update_Pf_3D!`: Updates pressure using the Darcy flux
@@ -99,11 +100,11 @@ The method consists of essentially 5 kernels for computing the various fields (a
   - `computedTdt_3D!`: Computes the dTdt term
   - `update_T_3D!`: Updates the temperature using the results of the two previous kernels
 
-In order to improve the performance of these kernels, we add shared memory for the 3 `compute_*` kernels. This reduces the number of global memory accesses. Since stencil computations are inherently memory bound, this optimization can greatly increase the throughput of our implementation.
+To improve the performance of these kernels, we add shared memory for the 3 `compute_*` kernels which reduces the number of global memory accesses. Since stencil computations are inherently memory bound, this optimization can greatly increase the throughput of our implementation.
 
-In order to get fine-grained control over shared memory in ParallelStencil, the kernels need to use `@parallel_indices` API, which resembles kernel programming for CUDA, instead of the more terse `@parallel` API. Thus all kernels were first ported to the `@parallel_indices` paradigm.
+In ParallelStencil, fine-grained control over shared memory can be achieved using the `@parallel_indices` API, which resembles kernel programming for CUDA, instead of the more terse `@parallel` API. Thus all kernels were first ported to the `@parallel_indices` paradigm.
 
-In each kernel, only a single field is moved into shared memory. As we will be choosing the maximum block size (32, 4, 4) for our implementation, shared memory becomes a scarce resource and storing additional fields in shared memory would decrease significantly the occupancy of the GPU. Thus the `update_*` kernels were not implemented using shared memory.
+In each kernel, only a single field is moved into shared memory. As we will be choosing the maximum block size ((32, 4, 4) = 1024) for our architecture, shared memory becomes a scarce resource and storing additional fields in shared memory would decrease significantly the occupancy of the GPU. Thus the `update_*` kernels were not implemented using shared memory.
 
 In addition, auxiliary fields that appear in multiple kernels (such as `gradT*`) are recomputed in each respective kernel to also decrease the number of global memory accesses. In the context of stencil computation, we can afford to make redundant calculations due to the arithmetic intensity being low.
 
@@ -120,22 +121,22 @@ The final result of the simulation is saved in a `.bin` file. It can be visualiz
 #### 3D plot
 ![porous-convection-3d](docs/T_3D.png)
 
-Alternatively, a 2D slice can be produced using the [plot_2D_slice.jl](scripts/plot_2d_slice.jl) script:
+Alternatively, a 2D slice can be plotted using the [plot_2D_slice.jl](scripts/plot_2d_slice.jl) script:
 #### 2D slice
 ![porous-convection-3d-slice](docs/T_slice.png)
 
 ### Distributed
-The script [PorousConvection_3D.jl](scripts/PorouseConvection_3D_multixpu.jl) enables the simulation to run distributed using MPI for communication. In case you are running on the SLURM batch system (which manages the MPI library), you can run the script on 8 processes using the following script:
+The script [PorousConvection_3D.jl](scripts/PorouseConvection_3D_multixpu.jl) enables the simulation to run distributed using MPI for communication. In case you are running on the SLURM batch system (which manages the MPI library), you can run the script on e.g. 8 processes using the following script:
 ```
 srun -N8 -n8 julia -O3 --check-bounds=no --project=. scripts/PorouseConvection_3D_multixpu.jl
 ```
-The simulation periodically saves the output, as `.bin`, to a directory (named `viz3Dmpi_out` by default). The visualization script [plot_3D_animation](scripts/plot_3d_animation.jl) in order to produce an animation:
+The simulation periodically saves the output, as `.bin` files, to a directory (named `viz3Dmpi_out` by default). The visualization script [plot_3D_animation.jl](scripts/plot_3d_animation.jl) can be used to produce an animation:
 #### Porous Convection 3D MPI
 ![porous-convection-3d-mpi](docs/porous-3d-multixpu.gif)
 
 ### Performance
 
-The benchmarks were performed on Piz Daint supercomputer which is a single NVIDIA® Tesla® P100 with 16GB of memory per node.
+The benchmarks were performed on Piz Daint supercomputer which has a single NVIDIA® Tesla® P100 GPU with 16GB of memory per node.
 
 #### Block Size
 The performance characteristic of GPU kernels is highly dependent on the correct selection of the block size. In the following benchmark, we evaluate the total runtime of the 5 stencil kernels for varying block sizes. This benchmark can be reproduced using [this](scripts/benchmarks/benchmark_block_size.jl) script.
@@ -154,11 +155,11 @@ As illustrated by the plot, we obtain good speedups for each kernel averaging a 
 
 
 #### Throughput
-In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below. Note that the maximum achieved on the NVIDIA P100 is ~550 [GB/s].
+In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below. Note that the empirical maximum throughput on the NVIDIA P100 is ~550 [GB/s].
 
 ![throughput](docs/throughput.png)
 
-This plot suggests that the two stencils which were not implemented using shared memory (`P` and `T`) exhibit the best effective throughput. Thus, we would expect these kernels to be less efficient. An explanation for this could be that since these kernels are the simplest expression containing few repeated fields (each field is used only in one expression) which would cause redundant global memory accesses. This makes them particularly performant even using a naive implementation.
+This plot suggests that the two stencils which were not implemented using shared memory (`P` and `T`) exhibit the best effective throughput. However, we would expect these kernels to be precisely the least efficient. An explanation for this could be that since these kernels are the simplest expression containing few repeated fields (each field is used only in one expression) and thus they suffer less from redundant global memory accesses. This makes them particularly performant even using the naive `@parallel` implementation.
 
 #### Weak Scaling
 All previous benchmarks were conducted on a single GPU. In this section, we will evaluate the scaling of our distributed implementation. 
