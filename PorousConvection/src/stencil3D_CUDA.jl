@@ -44,6 +44,8 @@ end
 
 """
 Computes Darcy flux.
+
+Memory transfers: 5 reads + 3 writes = 8 
 """
 @parallel_indices (ix, iy, iz) function compute_flux_p_3D!(
     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg
@@ -88,6 +90,8 @@ end
 
 """
 Updates pressure using Darcy flux.
+
+Memory transfers: 4 reads + 1 writes = 5 
 """
 @parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     nx, ny, nz = size(Pf)
@@ -104,6 +108,8 @@ end
 Helper function which:
     1) Computes Darcy flux using `compute_flux_p_3D!()`
     2) Updates pressure accordingly using `compute_Pf_3D!()`
+
+Memory transfers total: 9 reads + 4 writes = 13 
 """
 function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
@@ -117,6 +123,8 @@ end
 
 """
 Compute pressure fluxes and gradients.
+
+Memory transfers: 4 reads + 3 writes = 7
 """
 @parallel_indices (ix, iy, iz) function compute_flux_T_3D!(
     T, qTx, qTy, qTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
@@ -163,6 +171,8 @@ end
 
 """
 Compute dTdt expression.
+
+Memory transfers: 5 reads + 1 writes = 6
 """
 @parallel_indices (ix, iy, iz) function computedTdt_3D!(
     dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
@@ -203,6 +213,11 @@ Compute dTdt expression.
     return nothing
 end
 
+"""
+Compute temparature
+
+Memory transfers: 5 reads + 1 writes = 6
+"""
 @parallel_indices (ix, iy, iz) function update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
     nx, ny, nz = size(T)
     if (1 < ix < nx && 1 < iy < ny && 1 < iz < nz)
@@ -242,6 +257,8 @@ Helper function which:
     2) Computes dTdt expression using `computedTdt_3D()`
     3) Updates temperature accordingly using `update_T_3D!()`
     4) Applies von Neumann boundary conditions using `bc_xz!()` and `bc_yz!()`
+
+Memory transfers total: 14 reads + 5 writes = 19
 """
 function compute_temp_3D!(
     T,
