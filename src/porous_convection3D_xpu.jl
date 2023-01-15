@@ -26,6 +26,7 @@ Performs 3D porous convection simulation using ImplicitGlobalGrid.
 function porous_convection_implicit_3D(;
     Ra=1000.0, nt=500, nz=63, nvis=50, debug=false, save=true, hide_comm=false
 )
+    hide_comm = USE_GPU ? hide_comm : true # shmem should not effect CPU
     # physics
     lx, ly, lz = 40.0, 20.0, 20.0
     k_ηf = 1.0
@@ -203,14 +204,12 @@ function porous_convection_implicit_3D(;
                     dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
                 )
 
-                @hide_communication b_width begin
-                    @parallel blocks threads SHMEM.update_T_3D!(
-                        T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T
-                    )
-                    @parallel (1:size(T, 2), 1:size(T, 3)) SHMEM.bc_xz!(T)
-                    @parallel (1:size(T, 1), 1:size(T, 3)) SHMEM.bc_yz!(T)
-                    update_halo!(T)
-                end
+                @parallel blocks threads SHMEM.update_T_3D!(
+                    T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _1_dt_β_dτ_T
+                )
+                @parallel (1:size(T, 2), 1:size(T, 3)) SHMEM.bc_xz!(T)
+                @parallel (1:size(T, 1), 1:size(T, 3)) SHMEM.bc_yz!(T)
+                update_halo!(T)
             end
             niter += 1
             if iter % ncheck == 0

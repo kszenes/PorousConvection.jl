@@ -4,7 +4,7 @@ Benchmark to determine optimal block size.
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
-using PorousConvection.stencil3D_CUDA
+using PorousConvection.stencil3D_CUDA_shmem
 using Printf, BenchmarkTools
 
 @printf("Benchmarking Optimal Block Size\n")

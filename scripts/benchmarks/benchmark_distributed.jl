@@ -9,8 +9,8 @@ using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
     println("Running on GPU")
     @init_parallel_stencil(CUDA, Float64, 3)
-    import PorousConvection.stencil3D_CUDA_original as OG
-    import PorousConvection.stencil3D_CUDA as SHMEM
+    import PorousConvection.stencil3D_CUDA_hide_comm as OG
+    import PorousConvection.stencil3D_CUDA_shmem as SHMEM
 else
     println("Running on CPU")
     @init_parallel_stencil(Threads, Float64, 3)

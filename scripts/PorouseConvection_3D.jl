@@ -3,7 +3,7 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 3)
-    using PorousConvection.stencil3D_CUDA
+    import PorousConvection.stencil3D_CUDA_shmem as SHMEM
 else
     @init_parallel_stencil(Threads, Float64, 3)
     using PorousConvection.stencil3D_Threads

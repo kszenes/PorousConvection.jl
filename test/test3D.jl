@@ -4,7 +4,7 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 3)
-    using PorousConvection.stencil3D_CUDA
+    using PorousConvection.stencil3D_CUDA_shmem
 else
     @init_parallel_stencil(Threads, Float64, 3)
     using PorousConvection.stencil3D_Threads

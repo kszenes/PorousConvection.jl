@@ -1,4 +1,4 @@
-module stencil3D_CUDA
+module stencil3D_CUDA_shmem
 
 export compute_flux_p_3D!,
     update_Pf_3D!,
@@ -240,7 +240,7 @@ Memory transfers: 5 reads + 1 writes = 6
                     (T_l[tx, ty, tz + 1] - T_l[tx, ty, tz]) *
                     _dz
                 )
-            # NOTE: Kernel fusion attempted but produces wrong result
+            # NOTE: Kernel fusion attempted but produces incorrect result
             # +
             # (qTx[ix,iy-1,iz-1] - qTx[ix-1,iy-1,iz-1]) * _dx +
             # (qTy[ix-1,iy,iz-1] - qTy[ix-1,iy-1,iz-1]) * _dy +

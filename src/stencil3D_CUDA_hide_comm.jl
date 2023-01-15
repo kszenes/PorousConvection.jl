@@ -1,4 +1,4 @@
-module stencil3D_Threads_original
+module stencil3D_CUDA_hide_comm
 
 export compute_flux_p_3D!,
     update_Pf_3D!,
@@ -12,10 +12,15 @@ export compute_flux_p_3D!,
 
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)
 
 """
-Computes Darcy flux.
+    compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
+
+Computes the Darcy flux for the pressure using the formula:
+θ_D * ∂qD/∂τ + qD = - k / η * (∇p - ραgT)
+
+Memory transfers: 5 reads + 3 writes = 8 
 """
 @parallel function compute_flux_p_3D!(
     qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg
@@ -28,7 +33,12 @@ Computes Darcy flux.
 end
 
 """
+    update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
+
 Updates pressure using Darcy flux.
+β * ∂qD/∂τ + ∇ ⋅ qD = 0
+
+Memory transfers: 4 reads + 1 writes = 5 
 """
 @parallel function update_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     @all(Pf) = @all(Pf) - (@d_xa(qDx) * _dx + @d_ya(qDy) * _dy + @d_za(qDz) * _dz) * _β_dτ
@@ -36,9 +46,15 @@ Updates pressure using Darcy flux.
 end
 
 """
+    compute_pressure_3D!(
+        Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
+    )
+
 Helper function which:
-    1) Computes Darcy flux using `compute_flux_p_3D!()`
-    2) Updates pressure accordingly using `update_Pf_3D!()`
+1) Computes Darcy flux using `compute_flux_p_3D!()`
+2) Updates pressure accordingly using `update_Pf_3D!()`
+
+Memory transfers total: 9 reads + 4 writes = 13 
 """
 function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
@@ -49,7 +65,14 @@ function compute_pressure_3D!(
 end
 
 """
-Compute pressure fluxes and gradients.
+    function compute_flux_T_3D!(
+        T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
+    )
+
+Computes the temperature fluxes using the formula:
+qT = - λ * ∇T / (ρ * c_p)
+
+Memory transfers: 4 reads + 3 writes = 7
 """
 @parallel function compute_flux_T_3D!(
     T, qTx, qTy, qTz, gradTx, gradTy, gradTz, λ_ρCp, _dx, _dy, _dz, _1_θ_dτ_T
@@ -64,7 +87,15 @@ Compute pressure fluxes and gradients.
 end
 
 """
-Compute dTdt expression.
+    computedTdt_3D!(
+        dTdt, T, T_old, gradTx, gradTy, gradTz,
+        qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ
+    )
+
+Compute dTdt using the fomrula:
+dTdt = (T - T_old) / dt + qD ⋅ ∇T / ρ
+
+Memory transfers: 5 reads + 1 writes = 6
 """
 @parallel_indices (ix, iy, iz) function computedTdt_3D!(
     dTdt, T, T_old, gradTx, gradTy, gradTz, qDx, qDy, qDz, _dt, _ϕ
@@ -86,7 +117,12 @@ Compute dTdt expression.
 end
 
 """
-Update temperature
+    update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
+
+Updates temperature using the formula:
+∂T/∂τ + dTdt + ∇ ⋅ qT = 0
+
+Memory transfers: 5 reads + 1 writes = 6
 """
 @parallel function update_T_3D!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dt)
     @inn(T) =
@@ -96,6 +132,7 @@ Update temperature
 end
 
 """
+    bc_xz!(A)
 Apply von Neumann boundary conditions in xz-plane
 """
 @parallel_indices (iy, iz) function bc_xz!(A)
@@ -105,6 +142,7 @@ Apply von Neumann boundary conditions in xz-plane
 end
 
 """
+    bc_yz!(A)
 Apply von Neumann boundary conditions in yz-plane
 """
 @parallel_indices (ix, iz) function bc_yz!(A)
@@ -114,11 +152,18 @@ Apply von Neumann boundary conditions in yz-plane
 end
 
 """
+    compute_temp_3D!(
+        T, T_old, dTdt, qTx, qTy, qTz, gradTx, gradTy, gradTz,
+        qDx, qDy, qDz, _dx, _dy, _dz, _dt, _1_dt_β_dτ_T, λ_ρCp, _1_θ_dτ_T, _ϕ
+    )
+
 Helper function which:
-    1) Computes temperature fluxes and gradients using `compute_flux_T_3D!()`
-    2) Computes dTdt expression using `computedTdt_3D()`
-    3) Updates temperature accordingly using `update_T_3D!()`
-    4) Applies von Neumann boundary conditions using `bc_xz!()` and `bc_yz!()`
+1) Computes temperature fluxes and gradients using `compute_flux_T_3D!()`
+2) Computes dTdt expression using `computedTdt_3D()`
+3) Updates temperature accordingly using `update_T_3D!()`
+4) Applies von Neumann boundary conditions using `bc_xz!()` and `bc_yz!()`
+
+Memory transfers total: 14 reads + 5 writes = 19
 """
 function compute_temp_3D!(
     T,
