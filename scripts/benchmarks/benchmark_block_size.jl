@@ -1,3 +1,6 @@
+"""
+Benchmark to determine optimal block size.
+"""
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)

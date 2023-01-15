@@ -1,3 +1,6 @@
+"""
+Benchmark to compare performance of naive vs share memory implementation.
+"""
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)

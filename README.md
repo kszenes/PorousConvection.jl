@@ -6,8 +6,6 @@ TODO:
 - Documentation -> Add docsting ot each file
 - Better explanation for exclusive use of GPU implementation
 - Distributed Weak scaling
-- Few words about output animation (almost)
-- Mention what is being done @parallel vs @parallel_indices
 
 In this project, we implement a 3D multi-XPU finite-difference solver for the convection of a fluid due to temperature through a porous media. This is a procees that is of particular interest when modelling geophysical processes.
 
@@ -16,11 +14,13 @@ The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/
 **Content**
 
 - [PorousConvection.jl](#porousconvectionjl)
+  - [Getting Started](#getting-started)
+    - [Installation](#installation)
+    - [Code Organisation](#code-organisation)
   - [Theory](#theory)
     - [Equations](#equations)
     - [Numerical Methods](#numerical-methods)
   - [Implementation](#implementation)
-    - [Code Organisation](#code-organisation)
   - [Results](#results)
     - [Shared Memory](#shared-memory)
       - [3D plot](#3d-plot)
@@ -33,8 +33,25 @@ The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/
       - [Throughput](#throughput)
 
 
-## Theory
+## Getting Started
+### Installation
+```
+git clone https://github.com/kszenes/PorousConvection.jl
+julia --project=.
+julia> using Pkg; Pkg.instantiate()
+```
+### Code Organisation
+```
+PorousConvection.jl
+├── img                  <-- Benchmark plots
+├── scripts              <-- Misc scripts
+    ├── benchmarks       <-- Scripts to reproduce benchmarks
+    ├── plotting         <-- Scripts to produce figures
+├── src                  <-- Implementation source
+└──test                  <-- Unit and reference tests
+```
 
+## Theory
 ### Equations
 The porous convection process was modelled using the following system of equations:
 
@@ -91,20 +108,6 @@ In each kernel, only a single field is moved into shared memory. As we will be c
 
 In addition, auxiliary fields that appear in multiple kernels (such as `gradT*`) are recomputed in each respective kernel in order to also decrease the number of global memory accesses. In the context of stencil computation, we can afford making redundant calculation due to the arithmetic intensity being low.
 
-### Code Organisation
-
-```
-PorousConvection.jl
-├── PorousConvection        
-    ├── img                  <-- Benchmark plots
-    ├── scripts              <-- Execution scripts
-        ├── benchmarks       <-- Scripts to reproduce benchmarks
-
-    ├── src                  <-- Implementation source
-    ├── test                 <-- Unit tests
-
-└── matlab                 <-- Reference Matlab implementation
-```
 
 ## Results
 
