@@ -103,6 +103,8 @@ As illustrated by the plot, we obtain good speedups for each kernel averaging a 
 
 
 #### Throughput
-
+In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below.
 
 ![throughput](img/throughput.png)
+
+This plots suggests that the two stencils which were not implemented using shared memory (`P` adn `T`) exhibit the best effective throughput. Thus, we would expect these kernels to be less efficient. An explanation for this could be that since these kernels are the simplest expression containing few repeated fields (each field is used only in one expression) which would make cause redundant global memory accesses. This makes them particularly performant even using a naive implementation.
