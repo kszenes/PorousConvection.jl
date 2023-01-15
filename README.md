@@ -80,7 +80,15 @@ PorousConvection.jl
 
 ## Results
 
-**OUTPUT PLOTS**
+##### 3D plot
+![porous-convection-3d](docs/T_3D.png)
+##### 2D slice
+![porous-convection-3d-slice](docs/T_slice.png)
+
+### Porous Convection 3D MPI
+![porous-convection-3d-mpi](docs/porous-3d-multixpu.gif)
+
+
 
 ### Performance
 
@@ -91,13 +99,13 @@ The performance characteristic of GPU kernels are highly dependent on correct se
 
 Thus we select the (32, 4, 4) block size for all subsequent numerical experiments  as this exhibited the best performance.
 
-![block_size](img/block_size_benchmark.png)
+![block_size](docs/block_size_benchmark.png)
 
 #### Speedup
 In this section, we evaluate the speedup achieved in our improved implmentation using shared memory. The following benchmark compares the runtime for each kernel of the 5 kernels between the original and shared memory implementation. The percentage in each bar plot signifies the percentage of speedup. This benchmark may be reproduced using the `PorousConvection/scripts/benchmarks/benchmark_shmem.jl` script.
 
 
-![speedup](img/shared_vs_original_speedup.png)
+![speedup](docs/shared_vs_original_speedup.png)
 
 As illustrated by the plot, we obtain good speedups for each kernel averaging a **14.2%** overall speedup. Surprisingly, we also observe speedups for the kernels updating the pressure and temperature, which do not use shared memory. However, these two stencils have been ported to the `@parallel_indices` implementation which enables us to manually select the block size. This is most likely the reason for the performance increas.
 
@@ -105,6 +113,6 @@ As illustrated by the plot, we obtain good speedups for each kernel averaging a 
 #### Throughput
 In this section, we discuss the achieved effective memory throughput for the 5 stencils. The results are illustrated in the plot below.
 
-![throughput](img/throughput.png)
+![throughput](docs/throughput.png)
 
 This plots suggests that the two stencils which were not implemented using shared memory (`P` adn `T`) exhibit the best effective throughput. Thus, we would expect these kernels to be less efficient. An explanation for this could be that since these kernels are the simplest expression containing few repeated fields (each field is used only in one expression) which would make cause redundant global memory accesses. This makes them particularly performant even using a naive implementation.
