@@ -1,4 +1,3 @@
-const USE_GPU = true
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(CUDA, Float64, 3)
@@ -6,6 +5,8 @@ import PorousConvection.stencil3D_CUDA_original as OG
 import PorousConvection.stencil3D_CUDA as SHMEM
 
 using Printf, BenchmarkTools
+
+@printf("Benchmarking Shared Memory Implementation\n")
 
 nz = 255 
 nx, ny = 2 * (nz + 1) - 1, nz
@@ -73,6 +74,38 @@ _1_θ_dτ_T = 1.0 / (1.0 + θ_dτ_T)
 β_dτ_T = (re_T * λ_ρCp) / (cfl * min(dx, dy, dz) * max(lx, ly, lz))
 _1_dt_β_dτ_T = 1.0 / (1.0 / dt + β_dτ_T)
 
+@printf("=== Shared Memory ===\n")
+threads = (32, 4, 4)
+blocks  = (size(T) .+ threads .- 1) .÷ threads
+
+# --- Pressure ---
+time = @belapsed begin
+    @parallel $blocks $threads shmem=(prod($threads.+1))*sizeof(eltype($Pf)) SHMEM.compute_flux_p_3D!($qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg)
+end
+@printf("compute_flux_p_3D!: %f [s]\n", time)
+time = @belapsed begin
+    @parallel $blocks $threads SHMEM.compute_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
+end
+@printf("compute_Pf_3D!: %f [s]\n", time)
+
+# --- Temperature ---
+time = @belapsed begin
+    @parallel $blocks $threads shmem=prod($threads.+1)*sizeof(eltype($T)) SHMEM.compute_flux_T_3D!(
+        $T, $qTx, $qTy, $qTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
+    )
+end
+@printf("compute_flux_T_3D!: %f [s]\n", time)
+time = @belapsed begin
+    @parallel $blocks $threads shmem=prod($threads.+2)*sizeof(eltype($T)) SHMEM.computedTdt_3D!(
+        $dTdt, $T, $T_old, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_dt, $_ϕ
+    )
+end
+@printf("computedTdt!: %f [s]\n", time)
+time = @belapsed begin
+    @parallel $blocks $threads SHMEM.update_T_3D!($T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T)
+end
+@printf("update_T_3D!: %f [s]\n", time)
+
 @printf("\n=== Original ===\n")
 # --- Pressure ---
 time = @belapsed begin
@@ -104,49 +137,4 @@ end
 time = @belapsed begin
     @parallel (1:size($T, 2), 1:size($T, 3)) OG.bc_xz!($T)
 end
-@printf("bc_xz!: %f [s]\n", time)
-time = @belapsed begin
-    @parallel (1:size($T, 1), 1:size($T, 3)) OG.bc_yz!($T)
-end
-@printf("bc_yz!: %f [s]\n", time)
 
-
-@printf("=== Shared Memory ===\n")
-threads = (16, 4, 4)
-blocks  = (size(T) .+ threads .- 1) .÷ threads
-
-# --- Pressure ---
-time = @belapsed begin
-    @parallel $blocks $threads shmem=(prod($threads.+1))*sizeof(eltype($Pf)) SHMEM.compute_flux_p_3D!($qDx, $qDy, $qDz, $Pf, $T, $k_ηf, $_dx, $_dy, $_dz, $_1_θ_dτ_D, $αρg)
-end
-@printf("compute_flux_p_3D!: %f [s]\n", time)
-time = @belapsed begin
-@parallel $blocks $threads SHMEM.compute_Pf_3D!($Pf, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_β_dτ_D)
-end
-@printf("compute_Pf_3D!: %f [s]\n", time)
-
-# --- Temperature ---
-time = @belapsed begin
-@parallel $blocks $threads shmem=prod($threads.+1)*sizeof(eltype($T)) SHMEM.compute_flux_T_3D!(
-    $T, $qTx, $qTy, $qTz, $λ_ρCp, $_dx, $_dy, $_dz, $_1_θ_dτ_T
-)
-end
-@printf("compute_flux_T_3D!: %f [s]\n", time)
-time = @belapsed begin
-@parallel $blocks $threads shmem=prod($threads.+2)*sizeof(eltype($T)) SHMEM.computedTdt_3D!(
-$dTdt, $T, $T_old, $qDx, $qDy, $qDz, $_dx, $_dy, $_dz, $_dt, $_ϕ
-)
-end
-@printf("computedTdt!: %f [s]\n", time)
-time = @belapsed begin
-@parallel $blocks $threads SHMEM.update_T_3D!($T, $dTdt, $qTx, $qTy, $qTz, $_dx, $_dy, $_dz, $_1_dt_β_dτ_T)
-end
-@printf("update_T_3D!: %f [s]\n", time)
-time = @belapsed begin
-@parallel (1:size($T, 2), 1:size($T, 3)) SHMEM.bc_xz!($T)
-end
-@printf("bc_xz!: %f [s]\n", time)
-time = @belapsed begin
-@parallel (1:size($T, 1), 1:size($T, 3)) SHMEM.bc_yz!($T)
-end
-@printf("bc_yz!: %f [s]\n", time)

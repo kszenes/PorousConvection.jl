@@ -86,42 +86,6 @@ Computes Darcy flux.
     return nothing
 end
 
-# """
-# Updates pressure using Darcy flux.
-# TODO: Still does not work (only with threads = (5, 5, 5))
-# """
-# @parallel_indices (ix, iy, iz) function compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
-#     nx, ny, nz = size(Pf)
-#     tx = @threadIdx().x
-#     ty = @threadIdx().y
-#     tz = @threadIdx().z
-
-#     qDx_l = CUDA.@cuDynamicSharedMem(eltype(qDx), (@blockDim().x+1, @blockDim().y, @blockDim().z))
-#     qDy_l = CUDA.@cuDynamicSharedMem(eltype(qDy),
-#         (@blockDim().x, @blockDim().y+1, @blockDim().z),
-#         sizeof(qDx_l))
-#     offset = sizeof(qDx_l) + sizeof(qDy_l)
-#     qDz_l = CUDA.@cuDynamicSharedMem(eltype(qDz),
-#         (@blockDim().x, @blockDim().y, @blockDim().z+1),
-#         offset)
-
-#     if (ix <= nx && iy <= ny && iz <= nz)
-#         qDx_l[tx,ty,tz] = qDx[ix,iy,iz]
-#         qDy_l[tx,ty,tz] = qDy[ix,iy,iz]
-#         qDz_l[tx,ty,tz] = qDz[ix,iy,iz]
-#         if (@threadIdx().x == @blockDim().x) qDx_l[tx+1,ty,tz] = qDx[ix+1,iy,iz] end
-#         if (@threadIdx().y == @blockDim().y) qDy_l[tx,ty+1,tz] = qDy[ix,iy+1,iz] end
-#         if (@threadIdx().z == @blockDim().z) qDz_l[tx,ty,tz+1] = qDz[ix,iy,iz+1] end
-#         @sync_threads()
-#         Pf[ix,iy,iz] = Pf[ix,iy,iz] - _β_dτ * (
-#                 (qDx_l[tx+1,ty,tz] - qDx_l[tx,ty,tz]) * _dx +
-#                 (qDy_l[tx,ty+1,tz] - qDy_l[tx,ty,tz]) * _dy +
-#                 (qDz_l[tx,ty,tz+1] - qDz_l[tx,ty,tz]) * _dz
-#             )
-#     end
-#     return nothing
-# end
-
 """
 Updates pressure using Darcy flux.
 """
@@ -144,10 +108,8 @@ Helper function which:
 function compute_pressure_3D!(
     Pf, T, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ, k_ηf, _1_θ_dτ, αρg
 )
-    # TODO: change threads values
-    threads = (16, 4, 4)
+    threads = (32, 4, 4)
     blocks  = (size(Pf) .+ threads .- 1) .÷ threads
-    # @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_pX_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
     @parallel blocks threads shmem=(prod(threads.+1))*sizeof(eltype(Pf)) compute_flux_p_3D!(qDx, qDy, qDz, Pf, T, k_ηf, _dx, _dy, _dz, _1_θ_dτ, αρg)
     @parallel blocks threads compute_Pf_3D!(Pf, qDx, qDy, qDz, _dx, _dy, _dz, _β_dτ)
     return nothing
@@ -300,8 +262,7 @@ function compute_temp_3D!(
     _1_θ_dτ_T,
     _ϕ,
 )
-    threads = (16, 4, 4)
-    # blocks = size(T) .÷ threads
+    threads = (32, 4, 4)
     blocks  = (size(T) .+ threads .- 1) .÷ threads
 
     @parallel blocks threads shmem=prod(threads.+1)*sizeof(eltype(T)) compute_flux_T_3D!(
