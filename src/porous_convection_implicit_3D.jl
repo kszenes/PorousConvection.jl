@@ -1,6 +1,7 @@
 using Printf
 
 """
+    save_array(Aname, A)
 Write array to .bin file
 """
 function save_array(Aname, A)
@@ -11,7 +12,10 @@ function save_array(Aname, A)
 end
 
 """
-Performs 3D porous convection simulation using ImplicitGlobalGrid.
+    porous_convection_implicit_3D(;
+        Ra=1000.0, nt=5, nx=255, ny=127, nz=127, nvis=50, debug=false, save=false
+    )
+Performs 3D porous convection simulation using ParallelStencil.
 """
 function porous_convection_implicit_3D(;
     Ra=1000.0, nt=5, nx=255, ny=127, nz=127, nvis=50, debug=false, save=false
@@ -63,6 +67,7 @@ function porous_convection_implicit_3D(;
     qTy = @zeros(nx - 2, ny - 1, nz - 2)
     qTz = @zeros(nx - 2, ny - 2, nz - 1)
     dTdt = @zeros(nx - 2, ny - 2, nz - 2)
+    # Residuals
     r_Pf = zeros(nx, ny, nz)
     r_T = zeros(nx - 2, ny - 2, nz - 2)
     for it in 1:nt

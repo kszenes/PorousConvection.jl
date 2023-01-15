@@ -1,17 +1,39 @@
 # PorousConvection.jl
 
 [![Build Status](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml?query=branch%3Amain)
-# TODO:
+TODO:
 - Test
 - Documentation -> Add docsting ot each file
 - Better explanation for exclusive use of GPU implementation
 - Distributed Weak scaling
-- Few words about output animation
+- Few words about output animation (almost)
+- Mention what is being done @parallel vs @parallel_indices
+
+In this project, we implement a 3D multi-XPU finite-difference solver for the convection of a fluid due to temperature through a porous media. This is a procees that is of particular interest when modelling geophysical processes.
+
+The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl), for the stencil compuations, and [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl), for the distributed computation, and achieves good performance due to explicit use of shared memory to decrease the number of global memory accesses.
+
+**Content**
+
+- [PorousConvection.jl](#porousconvectionjl)
+  - [Theory](#theory)
+    - [Equations](#equations)
+    - [Numerical Methods](#numerical-methods)
+  - [Implementation](#implementation)
+    - [Code Organisation](#code-organisation)
+  - [Results](#results)
+    - [Shared Memory](#shared-memory)
+      - [3D plot](#3d-plot)
+      - [2D slice](#2d-slice)
+    - [Distributed](#distributed)
+      - [Porous Convection 3D MPI](#porous-convection-3d-mpi)
+    - [Performance](#performance)
+      - [Block Size](#block-size)
+      - [Speedup](#speedup)
+      - [Throughput](#throughput)
+
 
 ## Theory
-
-### Introduction
-In this project, we implement a 3D multi-XPU solver for the convection of a fluid due to temperature through a porous media. This is a procees that is of particular interest when modelling geophysics.
 
 ### Equations
 The porous convection process was modelled using the following system of equations:
@@ -50,8 +72,7 @@ $$
 
 These are solved using a conservative finite-differences scheme on a staggered grid. Indeed, the scalars (pressure and temperature) are defined inside the cells while the fluxes are defined on the cell boundaries.
 
-### Implementation
-The finte-difference is implemented using ParallelStencil Julia package and relies on ImplicitGlobalGrid for the distributed version.
+## Implementation
 
 The method consists of essentially 5 kernels for computing the various fields (as well as 2 additional kernels for implementing the boundary conditions). The 5 kernels compute the following fiels:
 - Pressure kernels:
@@ -63,6 +84,8 @@ The method consists of essentially 5 kernels for computing the various fields (a
   - `update_T_3D!`: Updates the temperature using the results of the two previous kernels
 
 In order to improve the performance of these kernels, we add shared memory for the 3 `compute_*` kernels. This reduces the number of global memory accesses. Since stencil computations are inherently memory bound, this optimization can greatly increase the throughput of our implementation.
+
+In order to get fine-grained control over shared memory in ParallelStencil, the kernels need to use `@parallel_indices` API, which resemble kernel programming for CUDA, instead of the more terse `@parallel` API. Thus all kernels were first ported to the `@parallel_indices` paradigm.
 
 In each kernel, only a single field is moved into shared memory. As we will be choosing the maximum block size (32, 4, 4) for our implementation, shared memory becomes a scarce ressource and storing additional fields into shared memory would decrease significantly the occupancy of the GPU. Thus the `update_*` kernels were not implemented using shared memoru.
 
@@ -85,15 +108,28 @@ PorousConvection.jl
 
 ## Results
 
-##### 3D plot
+### Shared Memory
+The [PorousConvection_3D.jl](scripts/PorouseConvection_3D.jl) script can be used to perform a shared memory simulation. Note the flag `USE_GPU` which selects the backend to be used. In order to achieve good performance, ensure that you enabled all optimization flags:
+
+```
+julia -O3 --check-bounds=no --project=. scripts/PorousConvection_3D.jl
+```
+The final result of the simulation is saved in a `.bin` file. It can be visualised using the [plot_3D.jl](scripts/plot_3d.jl) to produce the following result:
+#### 3D plot
 ![porous-convection-3d](docs/T_3D.png)
-##### 2D slice
+
+Alternatively, a 2D slice can be produced using the [plot_2D_slice.jl](scripts/plot_2d_slice.jl) script:
+#### 2D slice
 ![porous-convection-3d-slice](docs/T_slice.png)
 
-### Porous Convection 3D MPI
+### Distributed
+The script [PorousConvection_3D.jl](scripts/PorouseConvection_3D_multixpu.jl) enables the simulation to run distributed using MPI for communication. In case you are running on the slurm batch system (which manages the MPI library), you can run the script on 8 processes using the following script:
+```
+srun -N8 -n8 julia -O3 --check-bounds=no --project=. scripts/PorouseConvection_3D_multixpu.jl
+```
+The simulation periodically saves the output, as `.bin`, to a directory (named `viz3Dmpi_out` by default). The visualisation script [plot_3D_animation.jl](scripts/plot_3d_animation.jl) in order to produce an animation:
+#### Porous Convection 3D MPI
 ![porous-convection-3d-mpi](docs/porous-3d-multixpu.gif)
-
-
 
 ### Performance
 

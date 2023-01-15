@@ -3,8 +3,13 @@ using Printf
 using MPI: MPI
 MPI.Init()
 
+# Global max reduction
 max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
 
+"""
+    save_array(Aname, A)
+Write array to .bin file
+"""
 function save_array(Aname, A)
     fname = string(Aname, ".bin")
     out = open(fname, "w")
@@ -12,6 +17,12 @@ function save_array(Aname, A)
     return close(out)
 end
 
+"""
+    porous_convection_implicit_3D(;
+        Ra=1000.0, nt=500, nz=63, nvis=50, debug=false, save=true
+    )
+Performs 3D porous convection simulation using ImplicitGlobalGrid.
+"""
 function porous_convection_implicit_3D(;
     Ra=1000.0, nt=500, nz=63, nvis=50, debug=false, save=true
 )
