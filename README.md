@@ -45,6 +45,13 @@ $$
 
 These are solved using a conservative finite-differences scheme on a staggered grid. Indeed, the scalars (pressure and temperature) are defined inside the cells while the fluxes are defined on the cell boundaries.
 
+### Implementation
+- Parallel Stencil
+- Optimizations
+  - Kernel fusion 
+    - Eliminating auxiliary fields
+  - Shared Memory
+
 
 ## Results
 
