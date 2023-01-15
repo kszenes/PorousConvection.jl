@@ -1,11 +1,6 @@
 # PorousConvection.jl
 
 [![Build Status](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kszenes/PorousConvection.jl/actions/workflows/CI.yml?query=branch%3Amain)
-TODO:
-- Test
-- Documentation -> Add docsting ot each file
-- Better explanation for exclusive use of GPU implementation
-- Distributed Weak scaling
 
 In this project, we implement a 3D multi-XPU finite-difference solver for the convection of a fluid due to temperature through a porous media. This is a procees that is of particular interest when modelling geophysical processes.
 
