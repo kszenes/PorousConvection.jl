@@ -72,9 +72,7 @@ The first equation represents the mass balance using two approximations:
 - Darcy's law: assumes a linear dependence between the mass flux and the pressure gradient.
 - Boussinesq approximation which models buoyancy by neglecting all contributions of density differences that are not weighted by the gravitational term $g$. This ends up being a good approximation as the terms containing $g$ are dominant.
 
-???The second equation represents the incompressibility of the fluid
-The third equation models the heat flux using Fourier's law.
-The last equation represents the energy equation.
+The last 3 equations respectively represent the incompressibility of the fluid, the heat flux (modeled using Fourier's law) and the energy balance.
 
 ### Numerical Methods
 
