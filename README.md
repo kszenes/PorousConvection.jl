@@ -1,7 +1,11 @@
 # PorousConvection.jl
-- Shared memory (used CUDA primitives)
-- Removed superfluous fields (gradT*) and dTdt
-  - Fused kernels for since dTdt removed
+# TODO:
+- Git actions
+- Test
+- Documentation
+- Better explanation for exclusive use of GPU implementation
+- Distributed Weak scaling
+- Few words about output animation
 
 ## Theory
 
