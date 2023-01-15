@@ -31,6 +31,7 @@ The implementation relies on the [ParallelStencil.jl](https://github.com/omlins/
       - [Block Size](#block-size)
       - [Speedup](#speedup)
       - [Throughput](#throughput)
+      - [Weak Scaling](#weak-scaling)
 
 
 ## Getting Started
@@ -163,3 +164,14 @@ In this section, we discuss the achieved effective memory throughput for the 5 s
 ![throughput](docs/throughput.png)
 
 This plots suggests that the two stencils which were not implemented using shared memory (`P` adn `T`) exhibit the best effective throughput. Thus, we would expect these kernels to be less efficient. An explanation for this could be that since these kernels are the simplest expression containing few repeated fields (each field is used only in one expression) which would make cause redundant global memory accesses. This makes them particularly performant even using a naive implementation.
+
+#### Weak Scaling
+All previous benchmarks were conducted on a single GPU. In this section, we will evaluate the scaling of our distributed implementation. 
+
+ParallelStencil comes with a feature for overlapping computation and communication called `@hide_communication`. Unfortunately, this feature does not seem to supported for the low-level `@parallel_indices` API which prevents its use with our shared memory implementation.
+
+In the figure below, we can see the weak scaling for two implementations. One that includes shared memory (and thus does not overlap communication) and one which overlaps communication (and thus does not use shared memory). 
+
+![weak_scaling](img/weak_scaling.png)
+
+We observe that for single node computations (where there is no communication), the shared memory implementation performs better. However, as we increase the number of nodes, thus communication becoming the bottleneck, the efficiency gained by overlapping the computation and communication outweighs the performance benefit of shared memory.
