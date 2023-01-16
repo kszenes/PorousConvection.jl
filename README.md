@@ -81,6 +81,7 @@ To accelerate the solver, we use the pseudo-transient method which adds inertial
 $$
 \beta\frac{\partial p}{\partial\tau} + \nabla\cdot\boldsymbol{q_D} = 0
 $$
+
 $$
 \frac{\partial T}{\partial \tau} + \frac{T-T_\mathrm{old}}{\mathrm{d}t} + \frac{1}{\varphi}\boldsymbol{q_D}\cdot\nabla T + \nabla\cdot\boldsymbol{q_T} = 0
 $$
